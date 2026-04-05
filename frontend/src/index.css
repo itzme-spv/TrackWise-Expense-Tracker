@@ -1,0 +1,324 @@
+/*
+ * index.css — Global Styles for Smart Expense Tracker
+ *
+ * Structure:
+ *   1. Tailwind Directives
+ *   2. CSS Custom Properties (Design Tokens) — Light & Dark
+ *   3. Global Base Styles
+ *   4. Utility / Component Styles
+ *   5. Chart.js Canvas Overrides
+ *   6. Scrollbar Styling
+ *   7. Transition Helpers
+ */
+
+/* ── 1. Tailwind Directives ────────────────────────────────────────────────── */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── 2. CSS Custom Properties ──────────────────────────────────────────────── */
+/*
+ * Defining design tokens as CSS variables allows non-Tailwind CSS (e.g., Chart.js
+ * canvas styles, scrollbars) to stay in sync with the active theme.
+ * Tailwind's dark: classes handle component-level theming;
+ * these variables handle everything else.
+ */
+
+:root {
+  /* Backgrounds */
+  --bg-canvas: #f8fafc;           /* slate-50 — main page background */
+  --bg-card: #ffffff;             /* white cards */
+  --bg-navbar: #0f172a;           /* slate-900 — top nav */
+  --bg-muted: #f1f5f9;            /* slate-100 — muted surfaces */
+  --bg-input: #ffffff;
+
+  /* Borders */
+  --border-default: #e2e8f0;      /* slate-200 */
+  --border-subtle: #f1f5f9;       /* slate-100 */
+
+  /* Text */
+  --text-primary: #0f172a;        /* slate-900 */
+  --text-secondary: #475569;      /* slate-600 */
+  --text-muted: #94a3b8;          /* slate-400 */
+  --text-on-navy: #f8fafc;
+
+  /* Accent */
+  --accent-emerald: #10b981;
+  --accent-emerald-light: #d1fae5;
+  --accent-rose: #f43f5e;
+  --accent-rose-light: #ffe4e6;
+  --accent-amber: #f59e0b;
+  --accent-amber-light: #fef3c7;
+  --accent-blue: #3b82f6;
+
+  /* Shadows */
+  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 4px 16px -2px rgb(0 0 0 / 0.08);
+  --shadow-card-hover: 0 4px 6px -1px rgb(0 0 0 / 0.08), 0 12px 32px -4px rgb(0 0 0 / 0.12);
+
+  /* Chart.js — referenced in utils/chartDefaults.js */
+  --chart-grid: #f1f5f9;
+  --chart-text: #94a3b8;
+}
+
+/* Dark Mode Tokens — applied when `dark` class is on <html> */
+.dark {
+  --bg-canvas: #0f172a;           /* slate-900 */
+  --bg-card: #1e293b;             /* slate-800 */
+  --bg-navbar: #020617;           /* slate-950 */
+  --bg-muted: #1e293b;            /* slate-800 */
+  --bg-input: #1e293b;
+
+  --border-default: #334155;      /* slate-700 */
+  --border-subtle: #1e293b;       /* slate-800 */
+
+  --text-primary: #f1f5f9;        /* slate-100 */
+  --text-secondary: #94a3b8;      /* slate-400 */
+  --text-muted: #475569;          /* slate-600 */
+
+  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.3), 0 4px 16px -2px rgb(0 0 0 / 0.4);
+  --shadow-card-hover: 0 4px 6px -1px rgb(0 0 0 / 0.35), 0 12px 32px -4px rgb(0 0 0 / 0.5);
+
+  --chart-grid: #1e293b;
+  --chart-text: #475569;
+}
+
+/* ── 3. Global Base Styles ──────────────────────────────────────────────────── */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    /* Smooth theme transitions — all elements animate their colour changes */
+    transition: background-color 0.3s ease, color 0.3s ease;
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    font-family: 'Sora', ui-sans-serif, system-ui, sans-serif;
+    background-color: var(--bg-canvas);
+    color: var(--text-primary);
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  /* Semantic heading scale */
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 700;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+  }
+
+  /* Numeric data — monospace for columnar alignment in tables */
+  .font-numeric {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* ── 4. Component Utility Classes ───────────────────────────────────────────── */
+@layer components {
+
+  /* ── Card ──────────────────────────────────────────────────────────────── */
+  .card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: 1.25rem;       /* rounded-2xl */
+    padding: 1.5rem;              /* p-6 */
+    box-shadow: var(--shadow-card);
+    transition: box-shadow 0.3s ease, transform 0.3s ease;
+  }
+
+  .card:hover {
+    box-shadow: var(--shadow-card-hover);
+  }
+
+  /* ── Primary Button ────────────────────────────────────────────────────── */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl
+           bg-emerald-500 text-white font-semibold text-sm
+           hover:bg-emerald-600 active:scale-95
+           transition-all duration-200
+           focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2
+           disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100;
+  }
+
+  /* ── Secondary Button ──────────────────────────────────────────────────── */
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl
+           bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200
+           font-semibold text-sm
+           hover:bg-slate-200 dark:hover:bg-slate-600 active:scale-95
+           transition-all duration-200
+           focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* ── Danger Button ─────────────────────────────────────────────────────── */
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg
+           bg-rose-50 dark:bg-rose-900/30 text-rose-500
+           hover:bg-rose-100 dark:hover:bg-rose-900/50 active:scale-95
+           transition-all duration-200 text-sm font-medium
+           focus:outline-none focus:ring-2 focus:ring-rose-400;
+  }
+
+  /* ── Ghost Button (Icon only) ──────────────────────────────────────────── */
+  .btn-ghost {
+    @apply inline-flex items-center justify-center p-2 rounded-lg
+           text-slate-500 dark:text-slate-400
+           hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95
+           transition-all duration-200
+           focus:outline-none focus:ring-2 focus:ring-slate-400;
+  }
+
+  /* ── Form Input ─────────────────────────────────────────────────────────── */
+  .input-field {
+    @apply w-full px-4 py-2.5 rounded-xl text-sm font-medium
+           bg-slate-50 dark:bg-slate-800
+           border border-slate-200 dark:border-slate-700
+           text-slate-900 dark:text-slate-100
+           placeholder:text-slate-400 dark:placeholder:text-slate-500
+           focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent
+           transition-all duration-200;
+  }
+
+  /* ── Select / Dropdown ─────────────────────────────────────────────────── */
+  .select-field {
+    @apply input-field appearance-none cursor-pointer;
+  }
+
+  /* ── Form Label ─────────────────────────────────────────────────────────── */
+  .form-label {
+    @apply block text-xs font-semibold uppercase tracking-wider
+           text-slate-500 dark:text-slate-400 mb-1.5;
+  }
+
+  /* ── Badge ──────────────────────────────────────────────────────────────── */
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold;
+  }
+
+  .badge-income {
+    @apply badge bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400;
+  }
+
+  .badge-expense {
+    @apply badge bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-400;
+  }
+
+  /* ── Section heading ────────────────────────────────────────────────────── */
+  .section-title {
+    @apply text-base font-bold text-slate-800 dark:text-slate-100 tracking-tight;
+  }
+
+  /* ── Stat Number (currency displays) ───────────────────────────────────── */
+  .stat-number {
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+    @apply text-2xl font-semibold tracking-tight;
+  }
+
+  /* ── Page Section Wrapper ───────────────────────────────────────────────── */
+  .page-section {
+    @apply bg-white dark:bg-slate-800
+           rounded-2xl border border-slate-100 dark:border-slate-700
+           shadow-card p-6;
+  }
+}
+
+/* ── 5. Chart.js Canvas Overrides ───────────────────────────────────────────── */
+/*
+ * Chart.js renders to a <canvas> — we can't target it with Tailwind dark: classes
+ * directly. Instead, we override CSS variables which are read in chartDefaults.js.
+ */
+canvas {
+  display: block;
+  max-width: 100%;
+}
+
+/* ── 6. Custom Scrollbar ─────────────────────────────────────────────────────── */
+/* Thin scrollbar for modern browsers */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1; /* slate-300 */
+  border-radius: 999px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background-color: #334155; /* slate-700 */
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8; /* slate-400 */
+}
+
+/* ── 7. Page Transition & Loader ─────────────────────────────────────────────── */
+/* Fade-in applied to route pages to smooth navigation */
+.page-enter {
+  animation: fade-in 0.25s ease-out;
+}
+
+/* Budget Progress Bar — using CSS variable for Tailwind's JIT limitation with
+   dynamic widths. Set --progress-width on the element via inline style. */
+.progress-bar-fill {
+  width: var(--progress-width, 0%);
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── 8. Insight Alert Banners ─────────────────────────────────────────────────── */
+.alert-banner {
+  @apply flex items-start gap-3 p-4 rounded-xl border text-sm font-medium
+         animate-slide-down;
+}
+
+.alert-warning {
+  @apply alert-banner bg-amber-50 border-amber-200 text-amber-800
+         dark:bg-amber-900/20 dark:border-amber-700/50 dark:text-amber-300;
+}
+
+.alert-success {
+  @apply alert-banner bg-emerald-50 border-emerald-200 text-emerald-800
+         dark:bg-emerald-900/20 dark:border-emerald-700/50 dark:text-emerald-300;
+}
+
+.alert-danger {
+  @apply alert-banner bg-rose-50 border-rose-200 text-rose-800
+         dark:bg-rose-900/20 dark:border-rose-700/50 dark:text-rose-300;
+}
+
+/* ── 9. Table Row Alternating Colours ────────────────────────────────────────── */
+/* Used on the History page table — mirrors blueprint spec */
+.table-row-alt:nth-child(even) {
+  @apply bg-slate-50 dark:bg-slate-800/50;
+}
+
+.table-row-alt:hover {
+  @apply bg-slate-100 dark:bg-slate-700/50 transition-colors duration-150;
+}
+
+/* ── 10. Loading Skeleton ─────────────────────────────────────────────────────── */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-muted) 25%,
+    var(--border-default) 50%,
+    var(--bg-muted) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s linear infinite;
+  border-radius: 0.5rem;
+}
