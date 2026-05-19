@@ -37,8 +37,9 @@ import {
   Sun,
   Moon,
 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../context/ThemeContext';
+import { useAuth }  from '../context/AuthContext';
+import { useTheme }  from '../context/ThemeContext';
+import { useToast }  from '../context/ToastContext'; // Phase E — success toast on register
 
 // ── Field Error ────────────────────────────────────────────────────────────────
 const FieldError = ({ message }) =>
@@ -124,6 +125,7 @@ const FeatureBullet = ({ text }) => (
 const RegisterPage = () => {
   const { login } = useAuth();
   const { isDark, toggleTheme } = useTheme();
+  const { toast } = useToast(); // Phase E
   const navigate = useNavigate();
 
   // ── Form state ────────────────────────────────────────────────────────────
@@ -199,6 +201,7 @@ const RegisterPage = () => {
       });
       if (data.success) {
         login(data.token, data.user);  // Store JWT + set Axios header
+        toast.success(`Account created! Welcome to TrackWise, ${data.user.name.split(' ')[0]}! 🎉`, 'Welcome');
         navigate('/dashboard', { replace: true });
       }
     } catch (err) {

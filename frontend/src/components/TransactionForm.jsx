@@ -25,7 +25,8 @@
 
 import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
-import {
+import { useToast } from '../context/ToastContext'; // Phase B
+import{
   Mic,
   MicOff,
   PlusCircle,
@@ -38,6 +39,7 @@ import {
   ArrowUpCircle,
   ArrowDownCircle,
   CheckCircle2,
+  Repeat
 } from 'lucide-react';
 
 // ── Constants matching backend Transaction model enums ─────────────────────────
@@ -52,6 +54,8 @@ const CATEGORIES = [
   'Other',
 ];
 
+const RECURRING_FREQUENCIES = ['Daily', 'Weekly', 'Monthly'];
+
 const INITIAL_FORM = {
   title: '',
   amount: '',
@@ -59,6 +63,8 @@ const INITIAL_FORM = {
   category: 'Food & Groceries',
   date: new Date().toISOString().split('T')[0], // Today's date in YYYY-MM-DD
   notes: '',
+  isRecurring: false,          // Phase D — recurring transaction template
+  recurringFrequency: 'Monthly', // Phase D — Daily | Weekly | Monthly
 };
 
 // ── Mic Button Sub-Component ───────────────────────────────────────────────────
@@ -124,11 +130,14 @@ const SuccessToast = ({ show }) =>
  *   onSuccess {function(newTransaction)} — Called after successful API save
  */
 const TransactionForm = ({ onSuccess }) => {
+  // Phase B — toast replaces inline API error banner for submission errors
+  const { toast } = useToast();
   // ── Form state ───────────────────────────────────────────────────────────
   const [form, setForm] = useState(INITIAL_FORM);
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [apiError, setApiError] = useState('');
+  // Phase B: API errors fire as toasts — no longer stored in local state
+  const [micError, setMicError] = useState(''); // kept only for mic permission denials
   const [showSuccess, setShowSuccess] = useState(false);
 
   // ── Voice Dictation state ────────────────────────────────────────────────
@@ -183,7 +192,7 @@ const TransactionForm = ({ onSuccess }) => {
         setActiveField(null);
 
         if (event.error === 'not-allowed') {
-          setApiError('Microphone access denied. Please allow microphone permission.');
+          toast.error('Microphone access denied. Please allow microphone permission in your browser.', 'Mic Error');
         }
       };
 
@@ -237,7 +246,7 @@ const TransactionForm = ({ onSuccess }) => {
       // Start dictation for the requested field
       setActiveField(fieldName);
       setIsListening(true);
-      setApiError('');
+      //setApiError('');
 
       try {
         recognition.start();
@@ -291,8 +300,6 @@ const TransactionForm = ({ onSuccess }) => {
   // ── Form submission ────────────────────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setApiError('');
-
     // Stop dictation if active when user submits
     if (isListening) {
       recognitionRef.current?.stop();
@@ -306,12 +313,16 @@ const TransactionForm = ({ onSuccess }) => {
     try {
       // POST to /api/transactions — Axios Authorization header is set globally in AuthContext
       const { data } = await axios.post('/api/transactions', {
-        title: form.title.trim(),
-        amount: Number(form.amount),
-        type: form.type,
-        category: form.category,
-        date: form.date,
-        notes: form.notes.trim(),
+        title:              form.title.trim(),
+        amount:             Number(form.amount),
+        type:               form.type,
+        category:           form.category,
+        date:               form.date,
+        notes:              form.notes.trim(),
+        isRecurring:        form.isRecurring,              // Phase D
+        recurringFrequency: form.isRecurring               // Phase D
+          ? form.recurringFrequency
+          : undefined,
       });
 
       if (data.success) {
@@ -327,9 +338,11 @@ const TransactionForm = ({ onSuccess }) => {
         setErrors({});
       }
     } catch (err) {
-      const message =
-        err?.response?.data?.message || 'Failed to save transaction. Please try again.';
-      setApiError(message);
+      // Phase B — toast replaces inline API error banner
+      toast.error(
+        err?.response?.data?.message || 'Failed to save transaction. Please try again.',
+        'Save Failed'
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -526,12 +539,67 @@ const TransactionForm = ({ onSuccess }) => {
           </div>
         </div>
 
-        {/* ── API error message ─────────────────────────────────────────── */}
-        {apiError && (
-          <div className="alert-danger text-xs" role="alert">
-            {apiError}
-          </div>
-        )}
+        {/* ── Recurring toggle (Phase D) ────────────────────────────────── */}
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+          {/* Toggle header */}
+          <button
+            type="button"
+            onClick={() => setForm(prev => ({ ...prev, isRecurring: !prev.isRecurring }))}
+            className="w-full flex items-center justify-between px-4 py-3
+                       bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100
+                       dark:hover:bg-slate-700/60 transition-colors duration-150
+                       focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-500"
+            aria-pressed={form.isRecurring}
+            aria-expanded={form.isRecurring}
+          >
+            <span className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
+              <Repeat size={14} className={form.isRecurring ? 'text-emerald-500' : 'text-slate-400'} aria-hidden="true" />
+              Recurring transaction
+            </span>
+            {/* Pill toggle */}
+            <span
+              className={[
+                'relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200',
+                form.isRecurring ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600',
+              ].join(' ')}
+              aria-hidden="true"
+            >
+              <span className={[
+                'inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform duration-200',
+                form.isRecurring ? 'translate-x-4' : 'translate-x-0.5',
+              ].join(' ')} />
+            </span>
+          </button>
+
+          {/* Frequency selector — shown only when isRecurring is true */}
+          {form.isRecurring && (
+            <div className="px-4 py-3 bg-emerald-50/50 dark:bg-emerald-900/10 border-t border-slate-200 dark:border-slate-700 animate-slide-down">
+              <label className="form-label">Repeat frequency</label>
+              <div className="flex gap-2 mt-1">
+                {RECURRING_FREQUENCIES.map(freq => (
+                  <button
+                    key={freq}
+                    type="button"
+                    onClick={() => setForm(prev => ({ ...prev, recurringFrequency: freq }))}
+                    className={[
+                      'flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold transition-all duration-150',
+                      'border focus:outline-none focus:ring-2 focus:ring-emerald-400',
+                      form.recurringFrequency === freq
+                        ? 'bg-emerald-500 border-emerald-500 text-white shadow-sm'
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-emerald-300',
+                    ].join(' ')}
+                    aria-pressed={form.recurringFrequency === freq}
+                  >
+                    {freq}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-2 font-medium">
+                🔄 The cron scheduler will auto-generate copies of this transaction at midnight IST.
+              </p>
+            </div>
+          )}
+        </div>
 
         {/* ── Submit row ────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between pt-1">

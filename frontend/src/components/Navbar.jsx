@@ -20,10 +20,13 @@
  */
 
 import { useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, Link, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   History,
+  BarChart2,
+  Target,
+  Settings,
   Sun,
   Moon,
   LogOut,
@@ -35,6 +38,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { useToast } from '../context/ToastContext'; // Phase B
 
 // ── NavItem — reusable nav link with active state styling ─────────────────────
 const NavItem = ({ to, icon: Icon, label, onClick }) => (
@@ -94,6 +98,7 @@ const UserAvatar = ({ name, color = '#10b981', size = 'md' }) => {
 const Navbar = () => {
   const { user, logout } = useAuth();
   const { isDark, toggleTheme } = useTheme();
+  const { toast } = useToast(); // Phase B
   const navigate = useNavigate();
 
   // State: user profile dropdown open/closed
@@ -107,6 +112,7 @@ const Navbar = () => {
     setIsDropdownOpen(false);
     setIsMobileMenuOpen(false);
     logout();
+    toast.info('Signed out successfully.');
     navigate('/login', { replace: true });
   };
 
@@ -115,7 +121,9 @@ const Navbar = () => {
   // ── Nav Links Config ─────────────────────────────────────────────────────────
   const navLinks = [
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { to: '/history', icon: History, label: 'History' },
+    { to: '/history',   icon: History,         label: 'History'   },
+    { to: '/reports',   icon: BarChart2,        label: 'Reports'   },
+    { to: '/budgets',   icon: Target,           label: 'Budgets'   },
   ];
 
   return (
@@ -246,17 +254,18 @@ const Navbar = () => {
                       </p>
                     </div>
 
-                    {/* Profile link */}
-                    <button
+                    {/* Settings link — uses React Router Link (no hard reload) */}
+                    <Link
+                      to="/settings"
                       className="w-full flex items-center gap-3 px-4 py-2.5
                                  text-slate-300 hover:text-white hover:bg-slate-700
                                  transition-colors duration-150 text-sm"
                       role="menuitem"
                       onClick={() => setIsDropdownOpen(false)}
                     >
-                      <User size={15} className="text-slate-400" />
-                      Profile Settings
-                    </button>
+                      <Settings size={15} className="text-slate-400" />
+                      Settings
+                    </Link>
 
                     {/* Logout button */}
                     <button

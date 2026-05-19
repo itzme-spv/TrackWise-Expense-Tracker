@@ -1,70 +1,72 @@
 /**
  * controllers/transactionController.js
  *
- * Transaction Controller — business logic for all transaction operations:
- *   GET    /api/transactions          → getAllTransactions  (with filter/pagination)
- *   POST   /api/transactions          → createTransaction
- *   DELETE /api/transactions/:id      → deleteTransaction
- *   GET    /api/transactions/summary  → getSummary
- *   GET    /api/transactions/insights → getInsights
- *   GET    /api/transactions/export   → exportCSV
+ * Transaction Controller — single, clean Phase A implementation.
  *
- * All routes are PROTECTED — req.user is injected by authMiddleware.protect.
+ * Route map:
+ * GET    /api/transactions          → getAllTransactions  (filter / pagination / date range)
+ * POST   /api/transactions          → createTransaction   (supports isRecurring)
+ * PUT    /api/transactions/:id      → editTransaction     (Phase A)
+ * DELETE /api/transactions/:id      → deleteTransaction
+ * GET    /api/transactions/summary  → getSummary          (date-range aware)
+ * GET    /api/transactions/insights → getInsights         (locked to current month)
+ * GET    /api/transactions/export   → exportCSV
+ * GET    /api/transactions/titles   → getTitleSuggestions (Phase A — autocomplete)
+ * GET    /api/transactions/monthly  → getMonthlyTrend     (Phase A — reports)
  *
- * MERN Data Flow:
- *   React state change → axios.post('/api/transactions', data, { headers: { Authorization: 'Bearer <token>' } })
- *   → protect middleware → this controller → Mongoose → MongoDB → JSON → React setState
+ * ALL routes are PROTECTED — req.user is injected by authMiddleware.protect.
  */
 
-const { validationResult } = require('express-validator');
-const Transaction = require('../models/Transaction');
-const { TRANSACTION_CATEGORIES } = require('../models/Transaction');
+const { validationResult } = require("express-validator");
+const Transaction = require("../models/Transaction");
+const { TRANSACTION_CATEGORIES } = require("../models/Transaction");
 
-// ─── @route   GET /api/transactions ──────────────────────────────────────────
-// ─── @access  Private
-// Supports query params: ?page=1&limit=10&type=Expense&category=Food&search=coffee
+// ─── GET /api/transactions ────────────────────────────────────────────────────
 const getAllTransactions = async (req, res, next) => {
   try {
-    // ── Build dynamic filter object ──────────────────────────────────────────
-    const filter = { user_id: req.user._id }; // Always scope to the logged-in user
+    const filter = { user_id: req.user._id };
 
-    // Filter by Type (Income | Expense)
-    if (req.query.type && ['Income', 'Expense'].includes(req.query.type)) {
+    if (req.query.type && ["Income", "Expense"].includes(req.query.type))
       filter.type = req.query.type;
-    }
 
-    // Filter by Category
-    if (req.query.category && TRANSACTION_CATEGORIES.includes(req.query.category)) {
+    if (
+      req.query.category &&
+      TRANSACTION_CATEGORIES.includes(req.query.category)
+    )
       filter.category = req.query.category;
+
+    if (req.query.search && req.query.search.trim())
+      filter.title = { $regex: req.query.search.trim(), $options: "i" };
+
+    // Date range — History page date picker: ?from=YYYY-MM-DD&to=YYYY-MM-DD
+    if (req.query.from || req.query.to) {
+      filter.date = {};
+      if (req.query.from) filter.date.$gte = new Date(req.query.from);
+      if (req.query.to) {
+        const to = new Date(req.query.to);
+        to.setHours(23, 59, 59, 999);
+        filter.date.$lte = to;
+      }
     }
 
-    // Full-text search on title using a case-insensitive regex
-    if (req.query.search && req.query.search.trim() !== '') {
-      filter.title = { $regex: req.query.search.trim(), $options: 'i' };
-    }
-
-    // ── Pagination ────────────────────────────────────────────────────────────
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 10));
     const skip = (page - 1) * limit;
 
-    // ── Execute queries in parallel for performance ───────────────────────────
     const [transactions, totalCount] = await Promise.all([
       Transaction.find(filter)
-        .sort({ date: -1 })   // Most recent first
+        .sort({ date: -1 })
         .skip(skip)
         .limit(limit)
-        .lean(),              // .lean() returns plain JS objects — faster for reads
+        .lean(),
       Transaction.countDocuments(filter),
     ]);
-
-    const totalPages = Math.ceil(totalCount / limit);
 
     res.status(200).json({
       success: true,
       count: transactions.length,
       totalCount,
-      totalPages,
+      totalPages: Math.ceil(totalCount / limit),
       currentPage: page,
       data: transactions,
     });
@@ -73,36 +75,50 @@ const getAllTransactions = async (req, res, next) => {
   }
 };
 
-// ─── @route   POST /api/transactions ─────────────────────────────────────────
-// ─── @access  Private
+// ─── POST /api/transactions ───────────────────────────────────────────────────
 const createTransaction = async (req, res, next) => {
   try {
-    // Validate request body using express-validator rules (defined in route file)
     const errors = validationResult(req);
-    if (!errors.isEmpty()) {
+    if (!errors.isEmpty())
       return res.status(400).json({
         success: false,
         message: errors.array()[0].msg,
         errors: errors.array(),
       });
-    }
 
-    const { title, amount, type, category, date, notes } = req.body;
+    const {
+      title,
+      amount,
+      type,
+      category,
+      date,
+      notes,
+      isRecurring,
+      recurringFrequency,
+    } = req.body;
 
-    // Create and save the transaction — user_id comes from JWT (protect middleware)
+    if (isRecurring && !recurringFrequency)
+      return res.status(400).json({
+        success: false,
+        message: "Recurring frequency is required when isRecurring is true.",
+      });
+
     const transaction = await Transaction.create({
       title,
       amount,
       type,
       category,
       date: date || Date.now(),
-      notes: notes || '',
-      user_id: req.user._id, // Securely injected — never trusted from the client body
+      notes: notes || "",
+      user_id: req.user._id, // From JWT — never from body
+      isRecurring: !!isRecurring,
+      recurringFrequency: isRecurring ? recurringFrequency : null,
+      lastGeneratedAt: isRecurring ? new Date() : null,
     });
 
     res.status(201).json({
       success: true,
-      message: 'Transaction added successfully.',
+      message: "Transaction added successfully.",
       data: transaction,
     });
   } catch (error) {
@@ -110,26 +126,87 @@ const createTransaction = async (req, res, next) => {
   }
 };
 
-// ─── @route   DELETE /api/transactions/:id ───────────────────────────────────
-// ─── @access  Private
+// ─── PUT /api/transactions/:id  (Phase A) ─────────────────────────────────────
+const editTransaction = async (req, res, next) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty())
+      return res.status(400).json({
+        success: false,
+        message: errors.array()[0].msg,
+        errors: errors.array(),
+      });
+
+    const {
+      title,
+      amount,
+      type,
+      category,
+      date,
+      notes,
+      isRecurring,
+      recurringFrequency,
+    } = req.body;
+
+    if (isRecurring && !recurringFrequency)
+      return res.status(400).json({
+        success: false,
+        message: "Recurring frequency is required when isRecurring is true.",
+      });
+
+    // Build partial update — only include fields that were actually sent
+    const upd = {};
+    if (title !== undefined) upd.title = title;
+    if (amount !== undefined) upd.amount = Number(amount);
+    if (type !== undefined) upd.type = type;
+    if (category !== undefined) upd.category = category;
+    if (date !== undefined) upd.date = new Date(date);
+    if (notes !== undefined) upd.notes = notes;
+    if (isRecurring !== undefined) {
+      upd.isRecurring = !!isRecurring;
+      upd.recurringFrequency = isRecurring ? recurringFrequency : null;
+    }
+
+    const transaction = await Transaction.findOneAndUpdate(
+      { _id: req.params.id, user_id: req.user._id },
+      { $set: upd },
+      { new: true, runValidators: true },
+    );
+
+    if (!transaction)
+      return res.status(404).json({
+        success: false,
+        message: "Transaction not found or you are not authorised to edit it.",
+      });
+
+    res.status(200).json({
+      success: true,
+      message: "Transaction updated successfully.",
+      data: transaction,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ─── DELETE /api/transactions/:id ─────────────────────────────────────────────
 const deleteTransaction = async (req, res, next) => {
   try {
-    // Find by both _id AND user_id — prevents a user from deleting another user's transaction
     const transaction = await Transaction.findOneAndDelete({
       _id: req.params.id,
       user_id: req.user._id,
     });
 
-    if (!transaction) {
+    if (!transaction)
       return res.status(404).json({
         success: false,
-        message: 'Transaction not found or you are not authorised to delete it.',
+        message:
+          "Transaction not found or you are not authorised to delete it.",
       });
-    }
 
     res.status(200).json({
       success: true,
-      message: 'Transaction deleted successfully.',
+      message: "Transaction deleted successfully.",
       data: { _id: transaction._id },
     });
   } catch (error) {
@@ -137,138 +214,176 @@ const deleteTransaction = async (req, res, next) => {
   }
 };
 
-// ─── @route   GET /api/transactions/summary ──────────────────────────────────
-// ─── @access  Private
-// Returns Total Income, Total Expense, Balance, and Category Breakdown
-// Called on every Dashboard mount and after every transaction mutation
+// ─── GET /api/transactions/summary ───────────────────────────────────────────
 const getSummary = async (req, res, next) => {
   try {
-    // Use the static aggregation methods defined on the Transaction model
+    const options = {};
+    if (req.query.from) options.from = req.query.from;
+    if (req.query.to) options.to = req.query.to;
+
     const [summary, categoryBreakdown] = await Promise.all([
-      Transaction.getSummaryForUser(req.user._id),
-      Transaction.getCategoryBreakdownForUser(req.user._id),
+      Transaction.getSummaryForUser(req.user._id, options),
+      Transaction.getCategoryBreakdownForUser(req.user._id, options),
     ]);
 
-    // Include the user's budget for the progress bar calculation
     const monthlyBudget = req.user.monthlyBudget || 50000;
-    const budgetUsedPercent = Math.min(
-      100,
-      parseFloat(((summary.totalExpense / monthlyBudget) * 100).toFixed(1))
-    );
+    const budgetUsedPercent =
+      monthlyBudget > 0
+        ? Math.min(
+            100,
+            parseFloat(
+              ((summary.totalExpense / monthlyBudget) * 100).toFixed(1),
+            ),
+          )
+        : 0;
 
     res.status(200).json({
       success: true,
-      data: {
-        ...summary,
-        monthlyBudget,
-        budgetUsedPercent,
-        categoryBreakdown,
-      },
+      data: { ...summary, monthlyBudget, budgetUsedPercent, categoryBreakdown },
     });
   } catch (error) {
     next(error);
   }
 };
 
-// ─── @route   GET /api/transactions/insights ─────────────────────────────────
-// ─── @access  Private
-// Computes smart spending insights for the Alert Banner on the Dashboard
+// ─── GET /api/transactions/insights ──────────────────────────────────────────
 const getInsights = async (req, res, next) => {
   try {
-    const summary = await Transaction.getSummaryForUser(req.user._id);
-    const breakdown = await Transaction.getCategoryBreakdownForUser(req.user._id);
+    // ✦ Fix: Insights should always evaluate the CURRENT month's budget health
+    const now = new Date();
+    const fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    const toDate = new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+      999,
+    );
+    const options = { from: fromDate.toISOString(), to: toDate.toISOString() };
+
+    const [summary, breakdown] = await Promise.all([
+      Transaction.getSummaryForUser(req.user._id, options),
+      Transaction.getCategoryBreakdownForUser(req.user._id, options),
+    ]);
 
     const insights = [];
 
-    // ── Insight 1: Food & Groceries > 40% of total expenses ─────────────────
-    const foodCategory = breakdown.find((c) => c.category === 'Food & Groceries');
-    if (foodCategory && summary.totalExpense > 0) {
-      const foodPercent = (foodCategory.total / summary.totalExpense) * 100;
-      if (foodPercent > 40) {
+    // Rule 1 — Food & Groceries > 40% of total expenses
+    const food = breakdown.find((c) => c.category === "Food & Groceries");
+    if (food && summary.totalExpense > 0) {
+      const pct = (food.total / summary.totalExpense) * 100;
+      if (pct > 40)
         insights.push({
-          type: 'warning',
-          code: 'FOOD_OVERSPEND',
-          message: `⚠️ Food & Groceries accounts for ${foodPercent.toFixed(1)}% of your expenses — consider reducing dining out.`,
+          type: "warning",
+          code: "FOOD_OVERSPEND",
+          message: `⚠️ Food & Groceries is ${pct.toFixed(1)}% of your expenses — consider cutting dining out.`,
         });
-      }
     }
 
-    // ── Insight 2: Income > Expense by more than 20% ─────────────────────────
+    // Rule 2 — Savings rate ≥ 20%
     if (summary.totalIncome > 0 && summary.totalExpense > 0) {
-      const savingsRate =
-        ((summary.totalIncome - summary.totalExpense) / summary.totalIncome) * 100;
-      if (savingsRate >= 20) {
+      const rate =
+        ((summary.totalIncome - summary.totalExpense) / summary.totalIncome) *
+        100;
+      if (rate >= 20)
         insights.push({
-          type: 'success',
-          code: 'GOOD_SAVINGS',
-          message: `🎉 Great job! You're saving ${savingsRate.toFixed(1)}% of your income this period.`,
+          type: "success",
+          code: "GOOD_SAVINGS",
+          message: `🎉 You're saving ${rate.toFixed(1)}% of your income — great discipline!`,
         });
-      }
     }
 
-    // ── Insight 3: Budget overrun ─────────────────────────────────────────────
+    // Rule 3 — Budget exceeded
     const budget = req.user.monthlyBudget || 50000;
-    if (summary.totalExpense > budget) {
+    if (summary.totalExpense > budget)
       insights.push({
-        type: 'danger',
-        code: 'BUDGET_EXCEEDED',
-        message: `🚨 You have exceeded your monthly budget of ₹${budget.toLocaleString('en-IN')} by ₹${(summary.totalExpense - budget).toLocaleString('en-IN')}.`,
+        type: "danger",
+        code: "BUDGET_EXCEEDED",
+        message: `🚨 Monthly budget of ₹${budget.toLocaleString("en-IN")} exceeded by ₹${(summary.totalExpense - budget).toLocaleString("en-IN")}.`,
       });
-    }
 
-    res.status(200).json({
-      success: true,
-      data: { insights, summary },
-    });
+    res.status(200).json({ success: true, data: { insights, summary } });
   } catch (error) {
     next(error);
   }
 };
 
-// ─── @route   GET /api/transactions/export ───────────────────────────────────
-// ─── @access  Private
-// Generates and returns a CSV string for the "Download Report" button in React
+// ─── GET /api/transactions/export ────────────────────────────────────────────
 const exportCSV = async (req, res, next) => {
   try {
-    // Fetch ALL transactions (no pagination) for the export
     const transactions = await Transaction.find({ user_id: req.user._id })
       .sort({ date: -1 })
       .lean();
 
-    if (transactions.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'No transactions found to export.',
-      });
-    }
+    if (transactions.length === 0)
+      return res
+        .status(404)
+        .json({ success: false, message: "No transactions to export." });
 
-    // Build CSV header row
-    const headers = ['Date', 'Title', 'Category', 'Type', 'Amount (₹)', 'Notes'];
+    const headers = [
+      "Date",
+      "Title",
+      "Category",
+      "Type",
+      "Amount (₹)",
+      "Notes",
+      "Recurring",
+      "Frequency",
+      "Auto-Generated",
+    ];
 
-    // Map each transaction document to a CSV row
-    const rows = transactions.map((t) => {
-      const date = new Date(t.date).toLocaleDateString('en-IN');
-      // Wrap fields in quotes to handle commas in title/notes
-      return [
-        date,
-        `"${t.title}"`,
+    const rows = transactions.map((t) =>
+      [
+        new Date(t.date).toLocaleDateString("en-IN"),
+        `"${t.title.replace(/"/g, '""')}"`,
         t.category,
         t.type,
         t.amount,
-        `"${t.notes || ''}"`,
-      ].join(',');
-    });
-
-    const csvContent = [headers.join(','), ...rows].join('\n');
-
-    // Set response headers to trigger file download in the browser
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="expense_report_${Date.now()}.csv"`
+        `"${(t.notes || "").replace(/"/g, '""')}"`,
+        t.isRecurring ? "Yes" : "No",
+        t.recurringFrequency || "",
+        t.isGeneratedCopy ? "Yes" : "No",
+      ].join(","),
     );
 
-    res.status(200).send(csvContent);
+    const csv = [headers.join(","), ...rows].join("\n");
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="trackwise_export_${Date.now()}.csv"`,
+    );
+    res.status(200).send(csv);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ─── GET /api/transactions/titles  (Phase A — autocomplete) ──────────────────
+const getTitleSuggestions = async (req, res, next) => {
+  try {
+    const { q } = req.query;
+    if (!q || q.trim().length < 1)
+      return res.status(200).json({ success: true, data: [] });
+
+    const suggestions = await Transaction.getTitleSuggestions(
+      req.user._id,
+      q.trim(),
+      8,
+    );
+    res.status(200).json({ success: true, data: suggestions });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ─── GET /api/transactions/monthly  (Phase A — reports charts) ───────────────
+const getMonthlyTrend = async (req, res, next) => {
+  try {
+    const months = Math.min(24, Math.max(1, parseInt(req.query.months) || 6));
+    const trend = await Transaction.getMonthlyTrend(req.user._id, months);
+    res.status(200).json({ success: true, months, data: trend });
   } catch (error) {
     next(error);
   }
@@ -277,8 +392,11 @@ const exportCSV = async (req, res, next) => {
 module.exports = {
   getAllTransactions,
   createTransaction,
+  editTransaction,
   deleteTransaction,
   getSummary,
   getInsights,
   exportCSV,
+  getTitleSuggestions,
+  getMonthlyTrend,
 };

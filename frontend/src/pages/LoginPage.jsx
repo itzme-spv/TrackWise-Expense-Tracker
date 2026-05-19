@@ -35,8 +35,9 @@ import {
   Sun,
   Moon,
 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../context/ThemeContext';
+import { useAuth }  from '../context/AuthContext';
+import { useTheme }  from '../context/ThemeContext';
+import { useToast }  from '../context/ToastContext'; // Phase D/E — success toast on login
 
 // ── Reusable Field Error ───────────────────────────────────────────────────────
 const FieldError = ({ message }) =>
@@ -66,6 +67,7 @@ const BackgroundDecor = () => (
 const LoginPage = () => {
   const { login } = useAuth();
   const { isDark, toggleTheme } = useTheme();
+  const { toast } = useToast(); // Phase E — success toast after login
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -117,6 +119,7 @@ const LoginPage = () => {
       });
       if (data.success) {
         login(data.token, data.user);  // Persist JWT in AuthContext + localStorage
+        toast.success(`Welcome back, ${data.user.name.split(' ')[0]}! 👋`, 'Signed in');
         navigate(from, { replace: true });
       }
     } catch (err) {

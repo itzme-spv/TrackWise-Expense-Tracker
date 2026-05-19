@@ -175,4 +175,182 @@ const updateBudget = async (req, res, next) => {
   }
 };
 
-module.exports = { registerUser, loginUser, getMe, updateBudget };
+// ─── @route   DELETE /api/auth/account ───────────────────────────────────────
+// ─── @access  Private
+// ─── Phase A ✦ — Permanently deletes the user account and ALL their data
+/**
+ * Performs a hard delete of:
+ *   1. All Transaction documents belonging to this user
+ *   2. All Budget documents belonging to this user
+ *   3. The User document itself
+ *
+ * Requires the user to confirm their password in the request body as a
+ * safety gate — prevents accidental deletion via a stale authenticated session.
+ *
+ * MERN Data Flow:
+ *   SettingsPage → axios.delete('/api/auth/account', { data: { password } })
+ *   → protect middleware → deleteAccount
+ *   → Transaction.deleteMany + Budget.deleteMany + User.findByIdAndDelete
+ *   → AuthContext.logout() on frontend → Navigate('/login')
+ */
+const deleteAccount = async (req, res, next) => {
+  try {
+    const { password } = req.body;
+
+    if (!password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide your password to confirm account deletion.',
+      });
+    }
+
+    // Re-fetch user WITH password field (it's select:false in the schema)
+    const user = await User.findById(req.user._id).select('+password');
+
+    // Verify the provided password against the stored bcrypt hash
+    const isMatch = await user.matchPassword(password);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: 'Incorrect password. Account deletion cancelled.',
+      });
+    }
+
+    // Lazy-require to avoid circular dependency issues at module load time
+    const Transaction = require('../models/Transaction');
+    const Budget      = require('../models/Budget');
+
+    // Delete all user data — run in parallel for efficiency
+    await Promise.all([
+      Transaction.deleteMany({ user_id: req.user._id }),
+      Budget.deleteMany({ user_id: req.user._id }),
+    ]);
+
+    // Finally delete the user document itself
+    await User.findByIdAndDelete(req.user._id);
+
+    res.status(200).json({
+      success: true,
+      message: 'Account and all associated data permanently deleted.',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+// ─── @route   PUT /api/auth/profile ──────────────────────────────────────────
+// ─── @access  Private  (Phase C)
+/**
+ * Updates the authenticated user's name, email, avatarColor, and monthlyBudget.
+ * Email uniqueness is re-checked if the email is being changed.
+ *
+ * MERN Data Flow:
+ *   SettingsPage form → axios.put('/api/auth/profile', { name, email, avatarColor })
+ *   → protect middleware → updateProfile → User.findByIdAndUpdate
+ *   → updated doc → AuthContext.updateUser(updates) → Navbar re-renders
+ */
+const updateProfile = async (req, res, next) => {
+  try {
+    const { name, email, avatarColor, monthlyBudget } = req.body;
+
+    // If changing email, verify it isn't already taken by another account
+    if (email && email.toLowerCase() !== req.user.email) {
+      const existing = await User.findOne({ email: email.toLowerCase() });
+      if (existing) {
+        return res.status(409).json({
+          success: false,
+          message: 'That email address is already in use by another account.',
+        });
+      }
+    }
+
+    // Build partial update — only include defined fields
+    const updates = {};
+    if (name)          updates.name         = name.trim();
+    if (email)         updates.email        = email.toLowerCase().trim();
+    if (avatarColor)   updates.avatarColor  = avatarColor;
+    if (monthlyBudget) updates.monthlyBudget = Number(monthlyBudget);
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      updates,
+      { new: true, runValidators: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile updated successfully.',
+      user: {
+        _id:           user._id,
+        name:          user.name,
+        email:         user.email,
+        avatarColor:   user.avatarColor,
+        monthlyBudget: user.monthlyBudget,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ─── @route   PUT /api/auth/password ─────────────────────────────────────────
+// ─── @access  Private  (Phase C)
+/**
+ * Changes the authenticated user's password.
+ * Requires the current password for re-verification before hashing the new one.
+ *
+ * MERN Data Flow:
+ *   SettingsPage → axios.put('/api/auth/password', { currentPassword, newPassword })
+ *   → protect middleware → changePassword
+ *   → User.findById (with +password) → bcrypt.compare → user.password = new → save()
+ *   → pre-save hook auto-hashes the new password → 200 OK
+ */
+const changePassword = async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Both current and new password are required.',
+      });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'New password must be at least 6 characters.',
+      });
+    }
+    if (currentPassword === newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'New password must be different from your current password.',
+      });
+    }
+
+    // Re-fetch with password field (select:false in schema)
+    const user = await User.findById(req.user._id).select('+password');
+
+    const isMatch = await user.matchPassword(currentPassword);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: 'Current password is incorrect.',
+      });
+    }
+
+    // Assign the new plain-text password — the pre-save hook hashes it
+    user.password = newPassword;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Password changed successfully. Please log in again.',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { registerUser, loginUser, getMe, updateBudget, deleteAccount, updateProfile, changePassword };

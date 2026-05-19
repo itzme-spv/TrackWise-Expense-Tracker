@@ -6,7 +6,7 @@
  * server.js calls this function; it is NOT inlined there to keep server.js clean.
  */
 
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const connectDB = async () => {
   try {

@@ -14,8 +14,8 @@
  * controllers clean — the controller simply calls validationResult(req).
  */
 
-const express = require('express');
-const { body } = require('express-validator');
+const express = require("express");
+const { body } = require("express-validator");
 
 // Import controller functions (business logic)
 const {
@@ -23,10 +23,13 @@ const {
   loginUser,
   getMe,
   updateBudget,
-} = require('../controllers/authController');
+  deleteAccount,
+  updateProfile,
+  changePassword,
+} = require("../controllers/authController");
 
 // Import the JWT protect middleware
-const { protect } = require('../middleware/authMiddleware');
+const { protect } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
@@ -34,38 +37,48 @@ const router = express.Router();
 
 /** Rules applied to POST /register */
 const registerValidation = [
-  body('name')
+  body("name")
     .trim()
-    .notEmpty().withMessage('Full name is required.')
-    .isLength({ min: 2 }).withMessage('Name must be at least 2 characters.')
-    .isLength({ max: 60 }).withMessage('Name cannot exceed 60 characters.'),
+    .notEmpty()
+    .withMessage("Full name is required.")
+    .isLength({ min: 2 })
+    .withMessage("Name must be at least 2 characters.")
+    .isLength({ max: 60 })
+    .withMessage("Name cannot exceed 60 characters."),
 
-  body('email')
+  body("email")
     .trim()
-    .notEmpty().withMessage('Email is required.')
-    .isEmail().withMessage('Please provide a valid email address.')
+    .notEmpty()
+    .withMessage("Email is required.")
+    .isEmail()
+    .withMessage("Please provide a valid email address.")
     .normalizeEmail(),
 
-  body('password')
-    .notEmpty().withMessage('Password is required.')
-    .isLength({ min: 6 }).withMessage('Password must be at least 6 characters.'),
+  body("password")
+    .notEmpty()
+    .withMessage("Password is required.")
+    .isLength({ min: 6 })
+    .withMessage("Password must be at least 6 characters."),
 
-  body('monthlyBudget')
+  body("monthlyBudget")
     .optional()
-    .isNumeric().withMessage('Monthly budget must be a number.')
-    .isFloat({ min: 1 }).withMessage('Monthly budget must be at least 1.'),
+    .isNumeric()
+    .withMessage("Monthly budget must be a number.")
+    .isFloat({ min: 1 })
+    .withMessage("Monthly budget must be at least 1."),
 ];
 
 /** Rules applied to POST /login */
 const loginValidation = [
-  body('email')
+  body("email")
     .trim()
-    .notEmpty().withMessage('Email is required.')
-    .isEmail().withMessage('Please provide a valid email address.')
+    .notEmpty()
+    .withMessage("Email is required.")
+    .isEmail()
+    .withMessage("Please provide a valid email address.")
     .normalizeEmail(),
 
-  body('password')
-    .notEmpty().withMessage('Password is required.'),
+  body("password").notEmpty().withMessage("Password is required."),
 ];
 
 // ─── Route Definitions ────────────────────────────────────────────────────────
@@ -73,21 +86,37 @@ const loginValidation = [
 // @route   POST /api/auth/register
 // @desc    Register a new user account
 // @access  Public
-router.post('/register', registerValidation, registerUser);
+router.post("/register", registerValidation, registerUser);
 
 // @route   POST /api/auth/login
 // @desc    Authenticate user and return JWT
 // @access  Public
-router.post('/login', loginValidation, loginUser);
+router.post("/login", loginValidation, loginUser);
 
 // @route   GET /api/auth/me
 // @desc    Return the currently authenticated user's profile
 // @access  Private — protect middleware verifies JWT before getMe runs
-router.get('/me', protect, getMe);
+router.get("/me", protect, getMe);
 
 // @route   PUT /api/auth/budget
 // @desc    Update the user's monthly budget goal
 // @access  Private
-router.put('/budget', protect, updateBudget);
+router.put("/budget", protect, updateBudget);
+
+// @route   DELETE /api/auth/account
+// @desc    Permanently delete the authenticated user's account + all their data
+// @access  Private — requires password confirmation in request body
+// Phase A ✦
+router.delete("/account", protect, deleteAccount);
+
+// @route   PUT /api/auth/profile
+// @desc    Update name, email, avatarColor, monthlyBudget
+// @access  Private  (Phase C)
+router.put("/profile", protect, updateProfile);
+
+// @route   PUT /api/auth/password
+// @desc    Change password (requires currentPassword confirmation)
+// @access  Private  (Phase C)
+router.put("/password", protect, changePassword);
 
 module.exports = router;

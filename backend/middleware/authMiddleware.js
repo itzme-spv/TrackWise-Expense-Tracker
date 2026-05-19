@@ -14,8 +14,8 @@
  *   router.get('/', protect, transactionController.getAll);
  */
 
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const jwt = require("jsonwebtoken");
+const User = require("../models/User");
 
 // ─── protect Middleware ───────────────────────────────────────────────────────
 const protect = async (req, res, next) => {
@@ -25,16 +25,16 @@ const protect = async (req, res, next) => {
   // Expected format: "Authorization: Bearer eyJhbGci..."
   if (
     req.headers.authorization &&
-    req.headers.authorization.startsWith('Bearer ')
+    req.headers.authorization.startsWith("Bearer ")
   ) {
-    token = req.headers.authorization.split(' ')[1]; // Extract the token part
+    token = req.headers.authorization.split(" ")[1]; // Extract the token part
   }
 
   // If no token found, reject the request immediately
   if (!token) {
     return res.status(401).json({
       success: false,
-      message: 'Access denied. No token provided. Please log in.',
+      message: "Access denied. No token provided. Please log in.",
     });
   }
 
@@ -46,13 +46,13 @@ const protect = async (req, res, next) => {
     // Step 3: Fetch the user from MongoDB using the id embedded in the token payload
     // We explicitly exclude the password field (it's already select:false in schema,
     // but this makes the intention crystal-clear in code reviews)
-    const currentUser = await User.findById(decoded.id).select('-password');
+    const currentUser = await User.findById(decoded.id).select("-password");
 
     if (!currentUser) {
       // Token is valid but the user no longer exists in the database
       return res.status(401).json({
         success: false,
-        message: 'The user belonging to this token no longer exists.',
+        message: "The user belonging to this token no longer exists.",
       });
     }
 
@@ -64,24 +64,24 @@ const protect = async (req, res, next) => {
     next();
   } catch (error) {
     // Handle specific JWT errors with user-friendly messages
-    if (error.name === 'TokenExpiredError') {
+    if (error.name === "TokenExpiredError") {
       return res.status(401).json({
         success: false,
-        message: 'Your session has expired. Please log in again.',
+        message: "Your session has expired. Please log in again.",
       });
     }
 
-    if (error.name === 'JsonWebTokenError') {
+    if (error.name === "JsonWebTokenError") {
       return res.status(401).json({
         success: false,
-        message: 'Invalid authentication token. Please log in again.',
+        message: "Invalid authentication token. Please log in again.",
       });
     }
 
     // Fallback for any other unexpected error during verification
     return res.status(401).json({
       success: false,
-      message: 'Authentication failed.',
+      message: "Authentication failed.",
     });
   }
 };
