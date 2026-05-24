@@ -2,13 +2,13 @@
  * pages/RegisterPage.jsx  (Auth Upgrade — Phase 4A)
  *
  * Changes from previous version:
- *   ✦ Google Sign-Up button at the top via <GoogleLogin />
- *   ✦ "OR" divider between Google button and email/password form
- *   ✦ register() no longer logs in — shows a "check your inbox" confirmation
- *     screen instead of navigating to /dashboard
- *   ✦ Password strength meter (unchanged from Phase C)
- *   ✦ confirmPassword field (unchanged from Phase C)
- *   ✦ All Tailwind styling matches LoginPage exactly for visual consistency
+ * ✦ Google Sign-Up button at the top via <GoogleLogin />
+ * ✦ "OR" divider between Google button and email/password form
+ * ✦ register() no longer logs in — shows a "check your inbox" confirmation
+ * screen instead of navigating to /dashboard
+ * ✦ Password strength meter (unchanged from Phase C)
+ * ✦ confirmPassword field (unchanged from Phase C)
+ * ✦ All Tailwind styling matches LoginPage exactly for visual consistency
  */
 
 import { useState } from 'react';
@@ -284,6 +284,7 @@ const RegisterPage = () => {
                 Continuing with Google…
               </div>
             ) : (
+              /* Hardcoded width attribute removed here as well. */
               <div className="flex justify-center">
                 <GoogleLogin
                   onSuccess={handleGoogleSuccess}
@@ -293,7 +294,6 @@ const RegisterPage = () => {
                   shape="rectangular"
                   size="large"
                   text="signup_with"
-                  width="368"
                 />
               </div>
             )}

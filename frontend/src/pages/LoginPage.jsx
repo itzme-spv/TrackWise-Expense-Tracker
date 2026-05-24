@@ -2,11 +2,11 @@
  * pages/LoginPage.jsx  (Auth Upgrade — Phase 4)
  *
  * Changes from previous version:
- *   ✦ Google Sign-In button via <GoogleLogin /> from @react-oauth/google
- *   ✦ "OR" divider between Google button and email/password form
- *   ✦ "EMAIL_NOT_VERIFIED" error code shows a specific resend-verification hint
- *   ✦ "Forgot password?" link now navigates to /forgot-password
- *   ✦ All existing validation, show/hide toggle, dark mode unchanged
+ * ✦ Google Sign-In button via <GoogleLogin /> from @react-oauth/google
+ * ✦ "OR" divider between Google button and email/password form
+ * ✦ "EMAIL_NOT_VERIFIED" error code shows a specific resend-verification hint
+ * ✦ "Forgot password?" link now navigates to /forgot-password
+ * ✦ All existing validation, show/hide toggle, dark mode unchanged
  */
 
 import { useState } from 'react';
@@ -175,9 +175,8 @@ const LoginPage = () => {
               </div>
             ) : (
               /*
-                useOneTap=false prevents the One Tap popup which can conflict
-                with the button flow. theme and shape are set for visual consistency.
-                The component auto-adapts its colours for dark mode via CSS.
+                Hardcoded width attribute removed here.
+                This allows the button to dynamically size to fit mobile containers perfectly.
               */
               <div className="flex justify-center">
                 <GoogleLogin
@@ -188,7 +187,6 @@ const LoginPage = () => {
                   shape="rectangular"
                   size="large"
                   text="signin_with"
-                  width="368"
                 />
               </div>
             )}
