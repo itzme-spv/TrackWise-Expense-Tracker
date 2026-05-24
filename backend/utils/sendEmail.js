@@ -4,18 +4,18 @@
  * Nodemailer utility — sends a single email via SMTP.
  *
  * Expects in .env:
- *   SMTP_HOST     — e.g. smtp.gmail.com
- *   SMTP_PORT     — e.g. 587
- *   SMTP_EMAIL    — your sending address
- *   SMTP_PASSWORD — app password (NOT your account password for Gmail)
- *   FROM_NAME     — display name, e.g. "TrackWise"
+ * SMTP_HOST     — e.g. smtp.gmail.com
+ * SMTP_PORT     — e.g. 587
+ * SMTP_EMAIL    — your sending address
+ * SMTP_PASSWORD — app password (NOT your account password for Gmail)
+ * FROM_NAME     — display name, e.g. "TrackWise"
  *
  * Usage:
- *   await sendEmail({
- *     email:   'user@example.com',
- *     subject: 'Verify your email',
- *     message: '<p>Click <a href="...">here</a></p>',
- *   });
+ * await sendEmail({
+ * email:   'user@example.com',
+ * subject: 'Verify your email',
+ * message: '<p>Click <a href="...">here</a></p>',
+ * });
  */
 
 const nodemailer = require("nodemailer");
@@ -31,6 +31,7 @@ const sendEmail = async (options) => {
       user: process.env.SMTP_EMAIL,
       pass: process.env.SMTP_PASSWORD,
     },
+    family: 4, // ✦ THE MAGIC FIX: Forces IPv4 instead of IPv6 to prevent Render timeouts
   });
 
   const mailOptions = {
@@ -63,7 +64,6 @@ const wrapInTemplate = (subject, body) => `
       <table width="560" cellpadding="0" cellspacing="0"
              style="background:#ffffff;border-radius:12px;
                     box-shadow:0 2px 8px rgba(0,0,0,.08);overflow:hidden;">
-        <!-- Header -->
         <tr>
           <td style="background:#0f172a;padding:28px 40px;text-align:center;">
             <span style="color:#10b981;font-size:22px;font-weight:800;
@@ -73,14 +73,12 @@ const wrapInTemplate = (subject, body) => `
                          letter-spacing:2px;">Smart Expense Tracker</span>
           </td>
         </tr>
-        <!-- Body -->
         <tr>
           <td style="padding:36px 40px;color:#1e293b;font-size:15px;
                      line-height:1.7;">
             ${body}
           </td>
         </tr>
-        <!-- Footer -->
         <tr>
           <td style="background:#f1f5f9;padding:20px 40px;
                      text-align:center;font-size:12px;color:#94a3b8;">
