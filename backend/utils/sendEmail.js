@@ -25,13 +25,14 @@ const sendEmail = async (options) => {
   const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: parseInt(process.env.SMTP_PORT, 10) || 587,
-    // true for 465, false for other ports
     secure: parseInt(process.env.SMTP_PORT, 10) === 465,
     auth: {
       user: process.env.SMTP_EMAIL,
       pass: process.env.SMTP_PASSWORD,
     },
-    family: 4, // ✦ THE MAGIC FIX: Forces IPv4 instead of IPv6 to prevent Render timeouts
+    // The Ultimate IPv4 Overrides:
+    family: 4,
+    localAddress: "0.0.0.0",
   });
 
   const mailOptions = {
