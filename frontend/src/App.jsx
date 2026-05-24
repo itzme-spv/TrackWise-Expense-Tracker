@@ -2,20 +2,20 @@
  * App.jsx — Root Application Component  (Phase E — Final)
  *
  * All routes and providers complete across Phases A–E:
- *   - ToastProvider + ToastContainer — global notification stack
- *   - Onboarding wizard — shown once to new users on first dashboard visit
- *   - All protected routes wired: dashboard, history, settings, reports, budgets
+ * - ToastProvider + ToastContainer — global notification stack
+ * - Onboarding wizard — shown once to new users on first dashboard visit
+ * - All protected routes wired: dashboard, history, settings, reports, budgets
  *
  * Provider order (outermost first):
- *   ThemeProvider  → applies dark class to <html>
- *   BrowserRouter  → enables React Router hooks
- *   AuthProvider   → JWT session management + axios headers
- *   ToastProvider  → global toast notification state  ✦
- *   ErrorBoundary  → catches rendering errors
+ * ThemeProvider  → applies dark class to <html>
+ * BrowserRouter  → enables React Router hooks
+ * AuthProvider   → JWT session management + axios headers
+ * ToastProvider  → global toast notification state  ✦
+ * ErrorBoundary  → catches rendering errors
  *
  * MERN Data Flow:
- *   AuthContext reads localStorage JWT on mount → validates via GET /api/auth/me
- *   → sets `user` state → ProtectedRoute either renders children or redirects.
+ * AuthContext reads localStorage JWT on mount → validates via GET /api/auth/me
+ * → sets `user` state → ProtectedRoute either renders children or redirects.
  */
 
 import { Component } from 'react';
@@ -39,6 +39,11 @@ import NotFoundPage  from './pages/NotFoundPage';
 import SettingsPage from './pages/SettingsPage';
 import ReportsPage  from './pages/ReportsPage';
 import BudgetsPage  from './pages/BudgetsPage';
+
+// Phase 4 Auth pages
+import VerifyEmailPage    from './pages/VerifyEmailPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage  from './pages/ResetPasswordPage';
 
 // ── React Error Boundary ──────────────────────────────────────────────────────
 class ErrorBoundary extends Component {
@@ -151,6 +156,11 @@ const AppInner = () => {
         <Route element={<PublicRoute />}>
           <Route path="/login"    element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          
+          {/* ✦ Phase 4 Auth Upgrade Routes */}
+          <Route path="/verify-email/:token"   element={<VerifyEmailPage />} />
+          <Route path="/forgot-password"       element={<ForgotPasswordPage />} />
+          <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
         </Route>
 
         {/* Protected routes */}

@@ -1,113 +1,164 @@
 /**
- * models/User.js
+ * models/User.js  (Auth Upgrade — Email Verification + Google OAuth)
  *
- * Mongoose Schema for the User entity.
+ * New fields:
+ *   isVerified          — email/password users must verify before logging in
+ *   verificationToken   — hashed token stored in DB; raw sent in email link
+ *   resetPasswordToken  — hashed reset token (expires in 15 minutes)
+ *   resetPasswordExpire — expiry timestamp for reset token
+ *   avatarUrl           — Google profile picture URL (null for email users)
  *
- * MERN Data Flow note:
- *   When the React Registration form POSTs to /api/auth/register,
- *   the AuthController calls User.create({...}) which validates against
- *   this schema before persisting to MongoDB.
+ * Password is NOT globally required because Google OAuth users have no password.
+ * The controller validates its presence for email/password registration.
+ *
+ * New instance methods (use built-in `crypto` — no extra package needed):
+ *   getVerificationToken()  — generates raw token, stores SHA-256 hash, returns raw
+ *   getResetPasswordToken() — same pattern + sets 15-min expiry
  */
 
-const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
+const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const crypto = require("crypto"); // Node built-in
 
-// ─── Schema Definition ────────────────────────────────────────────────────────
 const UserSchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      required: [true, 'Full name is required.'],
+      required: [true, "Full name is required."],
       trim: true,
-      minlength: [2, 'Name must be at least 2 characters.'],
-      maxlength: [60, 'Name cannot exceed 60 characters.'],
+      minlength: [2, "Name must be at least 2 characters."],
+      maxlength: [60, "Name cannot exceed 60 characters."],
     },
 
     email: {
       type: String,
-      required: [true, 'Email address is required.'],
-      unique: true,           // Creates a unique index in MongoDB
-      lowercase: true,        // Normalise before storing
+      required: [true, "Email address is required."],
+      unique: true,
+      lowercase: true,
       trim: true,
       match: [
         /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/,
-        'Please enter a valid email address.',
+        "Please enter a valid email address.",
       ],
     },
 
+    // NOT required at schema level — Google users have no password.
+    // The register controller enforces it for email/password sign-up.
     password: {
       type: String,
-      required: [true, 'Password is required.'],
-      minlength: [6, 'Password must be at least 6 characters.'],
-      select: false, // Never return password field in queries by default
+      minlength: [6, "Password must be at least 6 characters."],
+      select: false, // Never returned in queries by default
     },
 
-    // Monthly budget goal stored per user (₹ value, e.g. 50000)
     monthlyBudget: {
       type: Number,
       default: 50000,
-      min: [1, 'Monthly budget must be at least 1.'],
+      min: [1, "Monthly budget must be at least 1."],
     },
 
-    // Avatar/profile initials colour — optional UX feature
+    // Hex colour for the initials avatar (used when no avatarUrl)
     avatarColor: {
       type: String,
-      default: '#3b82f6', // Tailwind blue-500
+      default: "#10b981",
+    },
+
+    // ── Auth Upgrade fields ──────────────────────────────────────────────────
+
+    // Google profile picture; null for email/password users
+    avatarUrl: {
+      type: String,
+      default: null,
+    },
+
+    // false until the user clicks the verification link in their inbox.
+    // Google users are created with isVerified: true (Google already verified).
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
+
+    // SHA-256 hash of the raw token sent in the verification email.
+    // select: false so it is never accidentally exposed in API responses.
+    verificationToken: {
+      type: String,
+      select: false,
+    },
+
+    // SHA-256 hash of the raw reset token sent in the forgot-password email.
+    resetPasswordToken: {
+      type: String,
+      select: false,
+    },
+
+    // Unix timestamp — token is only valid while Date.now() < this value.
+    resetPasswordExpire: {
+      type: Date,
+      select: false,
     },
   },
-  {
-    // Automatically adds `createdAt` and `updatedAt` timestamp fields
-    timestamps: true,
-  }
+  { timestamps: true },
 );
 
-// ─── Pre-Save Hook: Hash Password ─────────────────────────────────────────────
-/**
- * Before saving a User document, hash the plain-text password using bcrypt.
- * We only hash if the password field was actually modified (prevents
- * double-hashing on profile updates that don't touch the password).
- */
-UserSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next();
-
-  // Salt rounds = 12 — good balance of security vs. computation time
+// ── Pre-Save Hook: Hash Password ─────────────────────────────────────────────
+// Runs only when the password field exists AND was modified (prevents
+// double-hashing on profile updates, and skips Google-only accounts).
+UserSchema.pre("save", async function (next) {
+  if (!this.password || !this.isModified("password")) return next();
   const salt = await bcrypt.genSalt(12);
   this.password = await bcrypt.hash(this.password, salt);
   next();
 });
 
-// ─── Instance Method: Compare Password ───────────────────────────────────────
-/**
- * matchPassword(candidatePassword)
- * Used in the login controller to verify a plain-text password against
- * the stored bcrypt hash.
- *
- * @param {string} candidatePassword — plain-text password from the login form
- * @returns {Promise<boolean>}
- */
+// ── Instance Method: Compare Password ───────────────────────────────────────
 UserSchema.methods.matchPassword = async function (candidatePassword) {
-  // `this.password` is available here because we explicitly select it in the
-  // auth controller query: User.findOne({ email }).select('+password')
-  return await bcrypt.compare(candidatePassword, this.password);
+  if (!this.password) return false; // Google-only accounts have no password
+  return bcrypt.compare(candidatePassword, this.password);
 };
 
-// ─── Instance Method: Generate JWT ───────────────────────────────────────────
-/**
- * getSignedJwtToken()
- * Creates a signed JWT containing the user's MongoDB ObjectId as payload.
- * React stores this token in localStorage and sends it as a Bearer token
- * in the Authorization header for protected routes.
- *
- * @returns {string} — signed JWT token
- */
+// ── Instance Method: Generate JWT ───────────────────────────────────────────
 UserSchema.methods.getSignedJwtToken = function () {
-  return jwt.sign(
-    { id: this._id },                     // Payload: just the user id
-    process.env.JWT_SECRET,               // Secret from .env
-    { expiresIn: process.env.JWT_EXPIRE } // e.g. "7d"
-  );
+  return jwt.sign({ id: this._id }, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRE,
+  });
 };
 
-// ─── Export Model ─────────────────────────────────────────────────────────────
-module.exports = mongoose.model('User', UserSchema);
+// ── Instance Method: Generate Email Verification Token ──────────────────────
+/**
+ * 1. Generate 32 random bytes → hex string  (this is the RAW token)
+ * 2. SHA-256 hash it           → store the HASH in DB  (verificationToken)
+ * 3. Return the RAW token      → embed in the email link
+ *
+ * Why hash? If the DB is ever leaked, attackers can't use the hash directly.
+ * The controller hashes the URL token before comparing to the DB value.
+ */
+UserSchema.methods.getVerificationToken = function () {
+  const rawToken = crypto.randomBytes(32).toString("hex");
+
+  this.verificationToken = crypto
+    .createHash("sha256")
+    .update(rawToken)
+    .digest("hex");
+
+  return rawToken; // Send THIS in the email link
+};
+
+// ── Instance Method: Generate Password Reset Token ──────────────────────────
+/**
+ * Same hash-and-store pattern as verification, plus a 15-minute expiry.
+ */
+UserSchema.methods.getResetPasswordToken = function () {
+  const rawToken = crypto.randomBytes(32).toString("hex");
+
+  this.resetPasswordToken = crypto
+    .createHash("sha256")
+    .update(rawToken)
+    .digest("hex");
+
+  // 15 minutes from now
+  this.resetPasswordExpire = Date.now() + 15 * 60 * 1000;
+
+  return rawToken;
+};
+
+module.exports = mongoose.model("User", UserSchema);

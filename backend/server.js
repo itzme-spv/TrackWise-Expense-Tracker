@@ -2,15 +2,15 @@
  * server.js — Entry point for the Smart Expense Tracker API
  *
  * Phase A additions (marked ✦):
- *   - express-rate-limit on /api/auth/* (brute-force protection) ✦
- *   - /api/budgets route mounted ✦
- *   - node-cron recurring transaction scheduler started ✦
- *   - Security headers via manual middleware ✦
+ * - express-rate-limit on /api/auth/* (brute-force protection) ✦
+ * - /api/budgets route mounted ✦
+ * - node-cron recurring transaction scheduler started ✦
+ * - Security headers via manual middleware ✦
  *
  * MERN Data Flow:
- *   React (Frontend) → Axios HTTP Request
- *   → Express Router → Controller → Mongoose → MongoDB
- *   MongoDB Response → JSON → React setState → UI re-render
+ * React (Frontend) → Axios HTTP Request
+ * → Express Router → Controller → Mongoose → MongoDB
+ * MongoDB Response → JSON → React setState → UI re-render
  */
 
 const express = require("express");
@@ -40,7 +40,11 @@ app.use(express.urlencoded({ extended: true }));
 // CORS — allow the Vite dev server to reach this API
 app.use(
   cors({
-    origin: process.env.CLIENT_ORIGIN || "http://localhost:5173",
+    // Updated to check both variable names so Vercel is guaranteed to connect
+    origin:
+      process.env.CLIENT_URL ||
+      process.env.CLIENT_ORIGIN ||
+      "http://localhost:5173",
     credentials: true,
   }),
 );
@@ -54,8 +58,8 @@ if (process.env.NODE_ENV !== "test") {
 /**
  * Basic security headers without requiring helmet.
  * In production you can replace this block with:
- *   const helmet = require('helmet');
- *   app.use(helmet());
+ * const helmet = require('helmet');
+ * app.use(helmet());
  */
 app.use((req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
@@ -76,11 +80,11 @@ app.use((req, res, next) => {
  * legitimately batch many requests on the dashboard page.
  *
  * express-rate-limit config:
- *   windowMs — rolling window duration
- *   max      — max requests per window per IP
- *   message  — JSON sent when limit is hit (matches our API error shape)
- *   standardHeaders — sends RateLimit-* headers (RFC 6585)
- *   legacyHeaders   — suppresses old X-RateLimit-* headers
+ * windowMs — rolling window duration
+ * max      — max requests per window per IP
+ * message  — JSON sent when limit is hit (matches our API error shape)
+ * standardHeaders — sends RateLimit-* headers (RFC 6585)
+ * legacyHeaders   — suppresses old X-RateLimit-* headers
  */
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -148,21 +152,17 @@ app.use((err, req, res, next) => {
   if (err.name === "JsonWebTokenError")
     return res.status(401).json({ success: false, message: "Invalid token." });
   if (err.name === "TokenExpiredError")
-    return res
-      .status(401)
-      .json({
-        success: false,
-        message: "Token has expired. Please log in again.",
-      });
+    return res.status(401).json({
+      success: false,
+      message: "Token has expired. Please log in again.",
+    });
   if (err.code === 11000) {
     // MongoDB duplicate key error
     const field = Object.keys(err.keyValue || {})[0] || "field";
-    return res
-      .status(409)
-      .json({
-        success: false,
-        message: `Duplicate value for ${field}. Please use a different value.`,
-      });
+    return res.status(409).json({
+      success: false,
+      message: `Duplicate value for ${field}. Please use a different value.`,
+    });
   }
 
   res.status(err.statusCode || 500).json({

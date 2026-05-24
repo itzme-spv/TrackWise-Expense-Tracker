@@ -10,28 +10,31 @@
  * improvements, and the useTransition hook.
  *
  * StrictMode:
- *   Wrapping the app in <StrictMode> causes React to:
- *     - Double-invoke certain lifecycle functions in development to surface
- *       side effects in useEffect / useState initialisers
- *     - Warn about deprecated API usage
- *     - Detect unexpected state mutations
- *   StrictMode renders are development-only — no impact on production builds.
+ * Wrapping the app in <StrictMode> causes React to:
+ * - Double-invoke certain lifecycle functions in development to surface
+ * side effects in useEffect / useState initialisers
+ * - Warn about deprecated API usage
+ * - Detect unexpected state mutations
+ * StrictMode renders are development-only — no impact on production builds.
  *
  * Global Unhandled Error Listeners:
- *   The ErrorBoundary in App.jsx catches errors that occur during React rendering.
- *   However, it cannot catch:
- *     - Asynchronous errors (e.g., in setTimeout callbacks)
- *     - Unhandled Promise rejections (e.g., a forgotten .catch())
- *   We add window event listeners here to log those to the console in
- *   development, preventing silent failures during the viva review.
+ * The ErrorBoundary in App.jsx catches errors that occur during React rendering.
+ * However, it cannot catch:
+ * - Asynchronous errors (e.g., in setTimeout callbacks)
+ * - Unhandled Promise rejections (e.g., a forgotten .catch())
+ * We add window event listeners here to log those to the console in
+ * development, preventing silent failures during the viva review.
  *
  * MERN Data Flow starting point:
- *   index.html → main.jsx → App.jsx → ThemeProvider → BrowserRouter
- *   → AuthProvider (restores JWT session) → routes → pages → API calls
+ * index.html → main.jsx → App.jsx → ThemeProvider → BrowserRouter
+ * → AuthProvider (restores JWT session) → routes → pages → API calls
  */
 
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+
+// ✦ Phase 4 Auth Upgrade: Import the Google OAuth Provider
+import { GoogleOAuthProvider } from '@react-oauth/google';
 
 // Global styles: Tailwind directives + CSS variables + component classes
 import './index.css';
@@ -60,7 +63,7 @@ if (import.meta.env.DEV) {
    * silent failures in async/await code where .catch() is omitted.
    *
    * Example that this catches:
-   *   axios.get('/api/some-route'); // Missing await AND missing .catch()
+   * axios.get('/api/some-route'); // Missing await AND missing .catch()
    */
   window.addEventListener('unhandledrejection', (event) => {
     console.error(
@@ -89,7 +92,9 @@ if (!rootElement) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <App />
+    {/* ✦ Phase 4 Auth Upgrade: Wrap the entire app to enable Google Sign-In */}
+    <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}>
+      <App />
+    </GoogleOAuthProvider>
   </StrictMode>
 );
-

@@ -4,20 +4,21 @@
  * Global Authentication Context
  *
  * Provides the entire React tree with:
- *   - `user`         — The currently logged-in user object (or null)
- *   - `token`        — The JWT string (or null)
- *   - `isLoading`    — True while we're verifying a stored token on app load
- *   - `login()`      — Called after a successful /api/auth/login response
- *   - `logout()`     — Clears auth state and navigates to /login
- *   - `updateUser()` — Patches local user state (e.g., after budget update)
+ * - `user`         — The currently logged-in user object (or null)
+ * - `token`        — The JWT string (or null)
+ * - `isLoading`    — True while we're verifying a stored token on app load
+ * - `login()`      — Called after a successful /api/auth/login response
+ * - `logout()`     — Clears auth state and navigates to /login
+ * - `updateUser()` — Patches local user state (e.g., after budget update)
+ * - `loginWithGoogle()` — Handles Google OAuth token verification and login
  *
  * MERN Data Flow:
- *   1. User logs in → AuthContext.login() stores JWT in localStorage.
- *   2. axios default header is set: Authorization: Bearer <token>
- *   3. All subsequent Axios calls automatically include the token.
- *   4. Express protect middleware reads the header and injects req.user.
- *   5. On page refresh, AuthContext reads the token from localStorage
- *      and calls GET /api/auth/me to re-validate the session.
+ * 1. User logs in → AuthContext.login() stores JWT in localStorage.
+ * 2. axios default header is set: Authorization: Bearer <token>
+ * 3. All subsequent Axios calls automatically include the token.
+ * 4. Express protect middleware reads the header and injects req.user.
+ * 5. On page refresh, AuthContext reads the token from localStorage
+ * and calls GET /api/auth/me to re-validate the session.
  */
 
 import { createContext, useContext, useState, useEffect } from 'react';
@@ -122,6 +123,27 @@ export const AuthProvider = ({ children }) => {
     setUser(userData);
   };
 
+  // ── loginWithGoogle() ──────────────────────────────────────────────────────
+  /**
+   * Called by LoginPage/RegisterPage after a successful Google OAuth popup.
+   * Sends the Google ID token to our backend for verification, then logs the user in.
+   * * @param {string} credentialToken — The raw JWT returned directly by Google
+   */
+  const loginWithGoogle = async (credentialToken) => {
+    const { data } = await axios.post('/api/auth/google-login', { 
+      token: credentialToken 
+    });
+    
+    // The backend responds with our own app's JWT and the user object
+    const { token: appToken, user: userData } = data;
+    
+    // Utilize the exact same storage flow as standard login
+    localStorage.setItem('expenseToken', appToken);
+    setAxiosAuthHeader(appToken);
+    setToken(appToken);
+    setUser(userData);
+  };
+
   // ── logout() ─────────────────────────────────────────────────────────────────
   /**
    * Clears all auth state. The Navbar calls this when the user clicks "Logout".
@@ -150,6 +172,7 @@ export const AuthProvider = ({ children }) => {
     token,
     isLoading,
     login,
+    loginWithGoogle, // ✦ Now properly exported to the rest of the app
     logout,
     updateUser,
     isAuthenticated: !!user,
@@ -167,7 +190,7 @@ export const AuthProvider = ({ children }) => {
  * useAuth() — consume the AuthContext from any component.
  *
  * Usage:
- *   const { user, login, logout, isAuthenticated } = useAuth();
+ * const { user, login, logout, isAuthenticated } = useAuth();
  *
  * Throws a descriptive error if used outside of <AuthProvider>.
  */

@@ -1,41 +1,45 @@
 /**
- * routes/auth.js
+ * routes/auth.js  (Auth Upgrade — Phase 2)
  *
- * Authentication Routes
- * Mounted at: /api/auth  (see server.js)
+ * All /api/auth/* endpoints.
  *
- * Endpoint map:
- *   POST   /api/auth/register  → Register a new user
- *   POST   /api/auth/login     → Login and receive JWT
- *   GET    /api/auth/me        → Get current user profile (protected)
- *   PUT    /api/auth/budget    → Update monthly budget goal (protected)
+ * Public routes:
+ * POST   /register              — email/password sign-up (sends verification email)
+ * POST   /login                 — email/password login (rejects if !isVerified)
+ * GET    /verifyemail/:token    — activates account via link from email
+ * POST   /forgotpassword        — sends password-reset email
+ * PUT    /resetpassword/:token  — sets new password from reset link
+ * POST   /google-login          — Google ID token verification → JWT
  *
- * express-validator rules are defined HERE (in the route) to keep
- * controllers clean — the controller simply calls validationResult(req).
+ * Protected routes (require Bearer JWT via protect middleware):
+ * GET    /me                    — current user profile
+ * PUT    /budget                — update monthlyBudget
+ * PUT    /profile               — update name, email, avatarColor
+ * PUT    /password              — change password
+ * DELETE /account               — cascade-delete all user data
  */
 
 const express = require("express");
 const { body } = require("express-validator");
-
-// Import controller functions (business logic)
-const {
-  registerUser,
-  loginUser,
-  getMe,
-  updateBudget,
-  deleteAccount,
-  updateProfile,
-  changePassword,
-} = require("../controllers/authController");
-
-// Import the JWT protect middleware
-const { protect } = require("../middleware/authMiddleware");
-
 const router = express.Router();
 
-// ─── Validation Rule Sets ─────────────────────────────────────────────────────
+const {
+  register,
+  login,
+  verifyEmail,
+  forgotPassword,
+  resetPassword,
+  googleLogin,
+  getMe,
+  updateBudget,
+  updateProfile,
+  changePassword,
+  deleteAccount,
+} = require("../controllers/authController");
 
-/** Rules applied to POST /register */
+const { protect } = require("../middleware/authMiddleware");
+
+// ── Validation rule sets ───────────────────────────────────────────────────
 const registerValidation = [
   body("name")
     .trim()
@@ -45,7 +49,6 @@ const registerValidation = [
     .withMessage("Name must be at least 2 characters.")
     .isLength({ max: 60 })
     .withMessage("Name cannot exceed 60 characters."),
-
   body("email")
     .trim()
     .notEmpty()
@@ -53,13 +56,11 @@ const registerValidation = [
     .isEmail()
     .withMessage("Please provide a valid email address.")
     .normalizeEmail(),
-
   body("password")
     .notEmpty()
     .withMessage("Password is required.")
     .isLength({ min: 6 })
     .withMessage("Password must be at least 6 characters."),
-
   body("monthlyBudget")
     .optional()
     .isNumeric()
@@ -68,7 +69,6 @@ const registerValidation = [
     .withMessage("Monthly budget must be at least 1."),
 ];
 
-/** Rules applied to POST /login */
 const loginValidation = [
   body("email")
     .trim()
@@ -77,46 +77,32 @@ const loginValidation = [
     .isEmail()
     .withMessage("Please provide a valid email address.")
     .normalizeEmail(),
-
   body("password").notEmpty().withMessage("Password is required."),
 ];
 
-// ─── Route Definitions ────────────────────────────────────────────────────────
+// ── Public routes ──────────────────────────────────────────────────────────
 
-// @route   POST /api/auth/register
-// @desc    Register a new user account
-// @access  Public
-router.post("/register", registerValidation, registerUser);
+// Standard email / password
+router.post("/register", registerValidation, register);
+router.post("/login", loginValidation, login);
 
-// @route   POST /api/auth/login
-// @desc    Authenticate user and return JWT
-// @access  Public
-router.post("/login", loginValidation, loginUser);
+// Email verification — token comes from the link in the verification email
+// Using GET so the browser can hit it directly when the user clicks the link
+router.get("/verifyemail/:token", verifyEmail);
 
-// @route   GET /api/auth/me
-// @desc    Return the currently authenticated user's profile
-// @access  Private — protect middleware verifies JWT before getMe runs
+// Password reset flow
+router.post("/forgotpassword", forgotPassword);
+router.put("/resetpassword/:token", resetPassword);
+
+// Google OAuth (Token Verification approach)
+// Frontend sends: { token: '<Google ID token from @react-oauth/google>' }
+router.post("/google-login", googleLogin);
+
+// ── Protected routes ───────────────────────────────────────────────────────
 router.get("/me", protect, getMe);
-
-// @route   PUT /api/auth/budget
-// @desc    Update the user's monthly budget goal
-// @access  Private
 router.put("/budget", protect, updateBudget);
-
-// @route   DELETE /api/auth/account
-// @desc    Permanently delete the authenticated user's account + all their data
-// @access  Private — requires password confirmation in request body
-// Phase A ✦
-router.delete("/account", protect, deleteAccount);
-
-// @route   PUT /api/auth/profile
-// @desc    Update name, email, avatarColor, monthlyBudget
-// @access  Private  (Phase C)
 router.put("/profile", protect, updateProfile);
-
-// @route   PUT /api/auth/password
-// @desc    Change password (requires currentPassword confirmation)
-// @access  Private  (Phase C)
 router.put("/password", protect, changePassword);
+router.delete("/account", protect, deleteAccount);
 
 module.exports = router;

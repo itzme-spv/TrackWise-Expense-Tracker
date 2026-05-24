@@ -1,47 +1,30 @@
 /**
- * pages/RegisterPage.jsx
+ * pages/RegisterPage.jsx  (Auth Upgrade — Phase 4A)
  *
- * User Registration Page
- *
- * Fields:
- *   - Full Name
- *   - Email
- *   - Password (with strength indicator + show/hide toggle)
- *   - Confirm Password
- *   - Monthly Budget goal (₹, defaults to 50,000)
- *
- * Validation: Client-side (HTML5 + JS) + server-side errors surfaced in UI
- *
- * MERN Data Flow:
- *   Form submit → axios.post('/api/auth/register', { name, email, password, monthlyBudget })
- *   → Express authController.registerUser → User.create() → bcrypt hash (pre-save hook)
- *   → jwt.sign → { success: true, token, user }
- *   → AuthContext.login(token, user) → Navigate('/dashboard')
+ * Changes from previous version:
+ *   ✦ Google Sign-Up button at the top via <GoogleLogin />
+ *   ✦ "OR" divider between Google button and email/password form
+ *   ✦ register() no longer logs in — shows a "check your inbox" confirmation
+ *     screen instead of navigating to /dashboard
+ *   ✦ Password strength meter (unchanged from Phase C)
+ *   ✦ confirmPassword field (unchanged from Phase C)
+ *   ✦ All Tailwind styling matches LoginPage exactly for visual consistency
  */
 
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { GoogleLogin } from '@react-oauth/google';
 import axios from 'axios';
 import {
-  User,
-  Mail,
-  Lock,
-  Eye,
-  EyeOff,
-  Loader2,
-  Wallet,
-  ArrowRight,
-  AlertCircle,
-  IndianRupee,
-  CheckCircle2,
-  Sun,
-  Moon,
+  User, Mail, Lock, Eye, EyeOff, Loader2,
+  Wallet, ArrowRight, AlertCircle,
+  CheckCircle2, IndianRupee, Sun, Moon, MailCheck,
 } from 'lucide-react';
 import { useAuth }  from '../context/AuthContext';
-import { useTheme }  from '../context/ThemeContext';
-import { useToast }  from '../context/ToastContext'; // Phase E — success toast on register
+import { useTheme } from '../context/ThemeContext';
+import { useToast } from '../context/ToastContext';
 
-// ── Field Error ────────────────────────────────────────────────────────────────
+// ── Field error ────────────────────────────────────────────────────────────────
 const FieldError = ({ message }) =>
   message ? (
     <p className="flex items-center gap-1.5 text-xs text-rose-500 mt-1.5 font-medium" role="alert">
@@ -50,70 +33,56 @@ const FieldError = ({ message }) =>
     </p>
   ) : null;
 
-// ── Password Strength Indicator ────────────────────────────────────────────────
-/**
- * Computes a 0–4 strength score and renders coloured segment bars.
- * Rules: length ≥8, has uppercase, has number, has special char.
- */
-const PasswordStrength = ({ password }) => {
-  if (!password) return null;
-
-  const checks = [
-    password.length >= 8,
-    /[A-Z]/.test(password),
-    /[0-9]/.test(password),
-    /[^a-zA-Z0-9]/.test(password),
-  ];
-  const score = checks.filter(Boolean).length;
-
-  const config = {
-    0: { label: 'Too weak',  bars: [true,  false, false, false], color: 'bg-rose-500' },
-    1: { label: 'Weak',      bars: [true,  false, false, false], color: 'bg-rose-400' },
-    2: { label: 'Fair',      bars: [true,  true,  false, false], color: 'bg-amber-400' },
-    3: { label: 'Good',      bars: [true,  true,  true,  false], color: 'bg-blue-400' },
-    4: { label: 'Strong',    bars: [true,  true,  true,  true],  color: 'bg-emerald-500' },
-  }[score];
-
-  return (
-    <div className="mt-2 space-y-1.5" aria-label={`Password strength: ${config.label}`}>
-      {/* 4 segment bars */}
-      <div className="flex gap-1" aria-hidden="true">
-        {config.bars.map((active, i) => (
-          <div
-            key={i}
-            className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
-              active ? config.color : 'bg-slate-200 dark:bg-slate-700'
-            }`}
-          />
-        ))}
-      </div>
-      <p className={`text-xs font-semibold ${
-        score <= 1 ? 'text-rose-500' :
-        score === 2 ? 'text-amber-500' :
-        score === 3 ? 'text-blue-500' : 'text-emerald-500'
-      }`}>
-        {config.label}
-      </p>
-    </div>
-  );
-};
-
-// ── Background Decor ──────────────────────────────────────────────────────────
+// ── Background decoration ──────────────────────────────────────────────────────
 const BackgroundDecor = () => (
   <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-    <div
-      className="absolute inset-0 opacity-[0.025] dark:opacity-[0.04]"
-      style={{
-        backgroundImage: 'radial-gradient(circle, #10b981 1px, transparent 1px)',
-        backgroundSize: '28px 28px',
-      }}
-    />
+    <div className="absolute inset-0 opacity-[0.025] dark:opacity-[0.04]"
+      style={{ backgroundImage: 'radial-gradient(circle, #10b981 1px, transparent 1px)', backgroundSize: '28px 28px' }} />
     <div className="absolute -top-40 -right-32 w-96 h-96 bg-emerald-400/10 dark:bg-emerald-500/10 rounded-full blur-3xl" />
     <div className="absolute -bottom-40 -left-32 w-96 h-96 bg-violet-400/10 dark:bg-violet-500/10 rounded-full blur-3xl" />
   </div>
 );
 
-// ── Feature Bullet ─────────────────────────────────────────────────────────────
+// ── OR Divider ─────────────────────────────────────────────────────────────────
+const OrDivider = () => (
+  <div className="relative my-5">
+    <div className="absolute inset-0 flex items-center" aria-hidden="true">
+      <div className="w-full border-t border-slate-200 dark:border-slate-700" />
+    </div>
+    <div className="relative flex justify-center">
+      <span className="bg-white dark:bg-slate-800 px-3 text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+        or
+      </span>
+    </div>
+  </div>
+);
+
+// ── Password strength meter ────────────────────────────────────────────────────
+const PasswordStrength = ({ password }) => {
+  if (!password) return null;
+  const checks  = [password.length >= 8, /[A-Z]/.test(password), /[0-9]/.test(password), /[^a-zA-Z0-9]/.test(password)];
+  const score   = checks.filter(Boolean).length;
+  const configs = {
+    0: { label: 'Too weak',  color: 'bg-rose-500',    text: 'text-rose-500',    filled: 1 },
+    1: { label: 'Weak',      color: 'bg-rose-400',    text: 'text-rose-400',    filled: 1 },
+    2: { label: 'Fair',      color: 'bg-amber-400',   text: 'text-amber-500',   filled: 2 },
+    3: { label: 'Good',      color: 'bg-blue-400',    text: 'text-blue-500',    filled: 3 },
+    4: { label: 'Strong',    color: 'bg-emerald-500', text: 'text-emerald-500', filled: 4 },
+  };
+  const { label, color, text, filled } = configs[score];
+  return (
+    <div className="mt-2 space-y-1.5" aria-label={`Password strength: ${label}`}>
+      <div className="flex gap-1" aria-hidden="true">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${i < filled ? color : 'bg-slate-200 dark:bg-slate-700'}`} />
+        ))}
+      </div>
+      <p className={`text-xs font-semibold ${text}`}>{label}</p>
+    </div>
+  );
+};
+
+// ── Feature bullet ─────────────────────────────────────────────────────────────
 const FeatureBullet = ({ text }) => (
   <li className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
     <CheckCircle2 size={13} className="text-emerald-500 flex-shrink-0" aria-hidden="true" />
@@ -121,88 +90,134 @@ const FeatureBullet = ({ text }) => (
   </li>
 );
 
+// ── Email sent confirmation screen ─────────────────────────────────────────────
+// Shown after successful registration instead of navigating to /dashboard.
+// The user must verify their email before they can log in.
+const EmailSentScreen = ({ email, isDark, toggleTheme }) => (
+  <main className="relative min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center px-4 py-12 transition-colors duration-300">
+    <BackgroundDecor />
+    <button onClick={toggleTheme} className="absolute top-5 right-5 btn-ghost"
+      aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}>
+      {isDark ? <Sun size={18} className="text-amber-400" /> : <Moon size={18} className="text-slate-500" />}
+    </button>
+
+    <div className="relative w-full max-w-md">
+      <article className="card text-center space-y-5 py-10">
+        {/* Icon */}
+        <div className="w-20 h-20 rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center mx-auto ring-1 ring-emerald-200 dark:ring-emerald-800">
+          <MailCheck size={36} className="text-emerald-500" aria-hidden="true" />
+        </div>
+
+        {/* Heading */}
+        <div className="space-y-2">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
+            Check your inbox
+          </h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+            We've sent a verification link to
+          </p>
+          <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 px-3 py-1.5 rounded-lg inline-block">
+            {email}
+          </p>
+        </div>
+
+        {/* Instructions */}
+        <div className="text-left bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 space-y-2.5">
+          {[
+            'Open the email from TrackWise',
+            'Click the "Verify My Email" button',
+            'You\'ll be logged in automatically',
+          ].map((step, i) => (
+            <div key={i} className="flex items-start gap-3">
+              <span className="w-5 h-5 rounded-full bg-emerald-500 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
+                {i + 1}
+              </span>
+              <p className="text-sm text-slate-600 dark:text-slate-400">{step}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Expiry warning */}
+        <p className="text-xs text-slate-400 dark:text-slate-500">
+          The link expires in <span className="font-semibold text-slate-600 dark:text-slate-400">24 hours</span>.
+          Check your spam folder if you don't see it.
+        </p>
+
+        {/* Back to login */}
+        <Link to="/login" className="btn-primary w-full py-2.5 justify-center">
+          Back to Sign In
+        </Link>
+      </article>
+    </div>
+  </main>
+);
+
 // ── Main RegisterPage ──────────────────────────────────────────────────────────
 const RegisterPage = () => {
-  const { login } = useAuth();
-  const { isDark, toggleTheme } = useTheme();
-  const { toast } = useToast(); // Phase E
-  const navigate = useNavigate();
+  const { loginWithGoogle }       = useAuth();
+  const { isDark, toggleTheme }   = useTheme();
+  const { toast }                 = useToast();
+  const navigate                  = useNavigate();
 
-  // ── Form state ────────────────────────────────────────────────────────────
   const [form, setForm] = useState({
-    name: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    monthlyBudget: '50000',
+    name: '', email: '', password: '', confirmPassword: '', monthlyBudget: '50000',
   });
-  const [errors, setErrors] = useState({});
-  const [apiError, setApiError] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
+  const [errors,        setErrors]        = useState({});
+  const [apiError,      setApiError]      = useState('');
+  const [isSubmitting,  setIsSubmitting]  = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [showPassword,  setShowPassword]  = useState(false);
+  const [showConfirm,   setShowConfirm]   = useState(false);
+
+  // ✦ After registration, show the "check your inbox" screen instead of navigating
+  const [registeredEmail, setRegisteredEmail] = useState('');
+
+  if (registeredEmail) {
+    return <EmailSentScreen email={registeredEmail} isDark={isDark} toggleTheme={toggleTheme} />;
+  }
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
-    if (errors[name]) setErrors((prev) => ({ ...prev, [name]: '' }));
-    if (apiError) setApiError('');
+    setForm(p => ({ ...p, [name]: value }));
+    if (errors[name]) setErrors(p => ({ ...p, [name]: '' }));
+    if (apiError)     setApiError('');
   };
 
-  // ── Client-side validation ────────────────────────────────────────────────
   const validate = () => {
-    const newErrors = {};
-
-    if (!form.name.trim()) {
-      newErrors.name = 'Full name is required.';
-    } else if (form.name.trim().length < 2) {
-      newErrors.name = 'Name must be at least 2 characters.';
-    }
-
-    if (!form.email.trim()) {
-      newErrors.email = 'Email address is required.';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-      newErrors.email = 'Please enter a valid email address.';
-    }
-
-    if (!form.password) {
-      newErrors.password = 'Password is required.';
-    } else if (form.password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters.';
-    }
-
-    if (!form.confirmPassword) {
-      newErrors.confirmPassword = 'Please confirm your password.';
-    } else if (form.password !== form.confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match.';
-    }
-
-    if (form.monthlyBudget && (isNaN(Number(form.monthlyBudget)) || Number(form.monthlyBudget) < 1)) {
-      newErrors.monthlyBudget = 'Budget must be a positive number.';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    const e = {};
+    if (!form.name.trim() || form.name.trim().length < 2)
+      e.name = 'Name must be at least 2 characters.';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
+      e.email = 'Enter a valid email address.';
+    if (!form.password)
+      e.password = 'Password is required.';
+    else if (form.password.length < 6)
+      e.password = 'Password must be at least 6 characters.';
+    if (form.password !== form.confirmPassword)
+      e.confirmPassword = 'Passwords do not match.';
+    if (form.monthlyBudget && (isNaN(Number(form.monthlyBudget)) || Number(form.monthlyBudget) < 1))
+      e.monthlyBudget = 'Budget must be a positive number.';
+    setErrors(e);
+    return Object.keys(e).length === 0;
   };
 
-  // ── Submission ────────────────────────────────────────────────────────────
+  // ── Standard email/password registration ────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
     setApiError('');
     if (!validate()) return;
+
     setIsSubmitting(true);
     try {
-      // MERN flow: React → Express → User.create (bcrypt) → JWT → React state
       const { data } = await axios.post('/api/auth/register', {
-        name: form.name.trim(),
-        email: form.email.trim().toLowerCase(),
-        password: form.password,
+        name:          form.name.trim(),
+        email:         form.email.trim().toLowerCase(),
+        password:      form.password,
         monthlyBudget: Number(form.monthlyBudget) || 50000,
       });
       if (data.success) {
-        login(data.token, data.user);  // Store JWT + set Axios header
-        toast.success(`Account created! Welcome to TrackWise, ${data.user.name.split(' ')[0]}! 🎉`, 'Welcome');
-        navigate('/dashboard', { replace: true });
+        // ✦ Show email-sent screen — do NOT log in or navigate to dashboard
+        setRegisteredEmail(form.email.trim().toLowerCase());
       }
     } catch (err) {
       setApiError(err?.response?.data?.message || 'Registration failed. Please try again.');
@@ -211,25 +226,41 @@ const RegisterPage = () => {
     }
   };
 
+  // ── Google Sign-Up ────────────────────────────────────────────────────────
+  const handleGoogleSuccess = async (credentialResponse) => {
+    setGoogleLoading(true);
+    setApiError('');
+    try {
+      const user = await loginWithGoogle(credentialResponse.credential);
+      toast.success(`Account created! Welcome, ${user.name.split(' ')[0]}! 🎉`, 'Welcome');
+      navigate('/dashboard', { replace: true });
+    } catch (err) {
+      setApiError(err?.response?.data?.message || err?.message || 'Google sign-up failed. Please try again.');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const handleGoogleError = () => {
+    setApiError('Google sign-up was cancelled or failed. Please try again.');
+  };
+
+  // ── Password field helper (prevents focus-loss bug — defined outside render) ──
+  // (Already defined outside via PwInput below — see note in SettingsPage)
+  const passwordsMatch = form.confirmPassword && form.password === form.confirmPassword;
+
   return (
     <main className="relative min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center px-4 py-10 transition-colors duration-300">
       <BackgroundDecor />
 
-      {/* Theme toggle */}
-      <button
-        onClick={toggleTheme}
-        className="absolute top-5 right-5 btn-ghost"
-        aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-      >
-        {isDark
-          ? <Sun size={18} className="text-amber-400" />
-          : <Moon size={18} className="text-slate-500" />
-        }
+      <button onClick={toggleTheme} className="absolute top-5 right-5 btn-ghost"
+        aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}>
+        {isDark ? <Sun size={18} className="text-amber-400" /> : <Moon size={18} className="text-slate-500" />}
       </button>
 
       <div className="relative w-full max-w-md">
 
-        {/* ── Brand Header ───────────────────────────────────────────── */}
+        {/* Brand header */}
         <div className="text-center mb-7">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-slate-900 dark:bg-slate-700 shadow-lg mb-4 relative">
             <Wallet size={24} className="text-emerald-400" />
@@ -243,35 +274,52 @@ const RegisterPage = () => {
           </p>
         </div>
 
-        {/* ── Register Card ───────────────────────────────────────────── */}
         <article className="card">
+
+          {/* ── ✦ Google Sign-Up button ───────────────────────────────────── */}
+          <div className="w-full">
+            {googleLoading ? (
+              <div className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm text-slate-500 dark:text-slate-400">
+                <Loader2 size={16} className="animate-spin" />
+                Continuing with Google…
+              </div>
+            ) : (
+              <div className="flex justify-center">
+                <GoogleLogin
+                  onSuccess={handleGoogleSuccess}
+                  onError={handleGoogleError}
+                  useOneTap={false}
+                  theme={isDark ? 'filled_black' : 'outline'}
+                  shape="rectangular"
+                  size="large"
+                  text="signup_with"
+                  width="368"
+                />
+              </div>
+            )}
+          </div>
+
+          <OrDivider />
+
+          {/* ── Standard registration form ──────────────────────────────── */}
           <form onSubmit={handleSubmit} noValidate className="space-y-4">
 
-            {/* API Error */}
+            {/* API error */}
             {apiError && (
               <div className="alert-danger text-xs animate-slide-down" role="alert">
-                <AlertCircle size={15} className="flex-shrink-0" />
-                {apiError}
+                <AlertCircle size={15} className="flex-shrink-0" />{apiError}
               </div>
             )}
 
-            {/* Full Name */}
+            {/* Full name */}
             <div>
               <label htmlFor="reg-name" className="form-label">Full name</label>
               <div className="relative">
-                <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" aria-hidden="true" />
-                <input
-                  id="reg-name"
-                  name="name"
-                  type="text"
-                  autoComplete="name"
-                  value={form.name}
-                  onChange={handleChange}
-                  placeholder="Arjun Sharma"
+                <User size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <input id="reg-name" name="name" type="text" autoComplete="name"
+                  value={form.name} onChange={handleChange} placeholder="Arjun Sharma"
                   className={`input-field pl-10 ${errors.name ? 'border-rose-400 focus:ring-rose-400' : ''}`}
-                  aria-invalid={!!errors.name}
-                  maxLength={60}
-                />
+                  maxLength={60} aria-invalid={!!errors.name} />
               </div>
               <FieldError message={errors.name} />
             </div>
@@ -280,18 +328,11 @@ const RegisterPage = () => {
             <div>
               <label htmlFor="reg-email" className="form-label">Email address</label>
               <div className="relative">
-                <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" aria-hidden="true" />
-                <input
-                  id="reg-email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  value={form.email}
-                  onChange={handleChange}
-                  placeholder="you@example.com"
+                <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <input id="reg-email" name="email" type="email" autoComplete="email"
+                  value={form.email} onChange={handleChange} placeholder="you@example.com"
                   className={`input-field pl-10 ${errors.email ? 'border-rose-400 focus:ring-rose-400' : ''}`}
-                  aria-invalid={!!errors.email}
-                />
+                  aria-invalid={!!errors.email} />
               </div>
               <FieldError message={errors.email} />
             </div>
@@ -300,102 +341,71 @@ const RegisterPage = () => {
             <div>
               <label htmlFor="reg-password" className="form-label">Password</label>
               <div className="relative">
-                <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" aria-hidden="true" />
-                <input
-                  id="reg-password"
-                  name="password"
-                  type={showPassword ? 'text' : 'password'}
-                  autoComplete="new-password"
-                  value={form.password}
-                  onChange={handleChange}
+                <Lock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <input id="reg-password" name="password" type={showPassword ? 'text' : 'password'}
+                  autoComplete="new-password" value={form.password} onChange={handleChange}
                   placeholder="Min. 6 characters"
                   className={`input-field pl-10 pr-11 ${errors.password ? 'border-rose-400 focus:ring-rose-400' : ''}`}
-                  aria-invalid={!!errors.password}
-                />
-                <button type="button"
-                  onClick={() => setShowPassword((p) => !p)}
+                  aria-invalid={!!errors.password} />
+                <button type="button" onClick={() => setShowPassword(p => !p)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors p-0.5"
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}>
+                  {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                 </button>
               </div>
-              {/* Password strength indicator — shows as user types */}
               <PasswordStrength password={form.password} />
               <FieldError message={errors.password} />
             </div>
 
-            {/* Confirm Password */}
+            {/* Confirm password */}
             <div>
               <label htmlFor="reg-confirm" className="form-label">Confirm password</label>
               <div className="relative">
-                <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" aria-hidden="true" />
-                <input
-                  id="reg-confirm"
-                  name="confirmPassword"
-                  type={showConfirm ? 'text' : 'password'}
-                  autoComplete="new-password"
-                  value={form.confirmPassword}
-                  onChange={handleChange}
+                <Lock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <input id="reg-confirm" name="confirmPassword" type={showConfirm ? 'text' : 'password'}
+                  autoComplete="new-password" value={form.confirmPassword} onChange={handleChange}
                   placeholder="Re-enter your password"
                   className={`input-field pl-10 pr-11 ${errors.confirmPassword ? 'border-rose-400 focus:ring-rose-400' : ''}`}
-                  aria-invalid={!!errors.confirmPassword}
-                />
-                <button type="button"
-                  onClick={() => setShowConfirm((p) => !p)}
+                  aria-invalid={!!errors.confirmPassword} />
+                <button type="button" onClick={() => setShowConfirm(p => !p)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors p-0.5"
-                  aria-label={showConfirm ? 'Hide confirm password' : 'Show confirm password'}
-                >
-                  {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
+                  aria-label={showConfirm ? 'Hide confirm password' : 'Show confirm password'}>
+                  {showConfirm ? <EyeOff size={15} /> : <Eye size={15} />}
                 </button>
               </div>
-              {/* Match indicator */}
-              {form.confirmPassword && form.password === form.confirmPassword && (
+              {passwordsMatch && (
                 <p className="flex items-center gap-1.5 text-xs text-emerald-500 mt-1.5 font-medium">
-                  <CheckCircle2 size={11} aria-hidden="true" />
-                  Passwords match
+                  <CheckCircle2 size={11} aria-hidden="true" />Passwords match
                 </p>
               )}
               <FieldError message={errors.confirmPassword} />
             </div>
 
-            {/* Monthly Budget */}
+            {/* Monthly budget */}
             <div>
               <label htmlFor="reg-budget" className="form-label">
                 Monthly budget goal
                 <span className="ml-1.5 normal-case tracking-normal font-normal text-slate-400">(optional)</span>
               </label>
               <div className="relative">
-                <IndianRupee size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" aria-hidden="true" />
-                <input
-                  id="reg-budget"
-                  name="monthlyBudget"
-                  type="number"
-                  value={form.monthlyBudget}
-                  onChange={handleChange}
-                  placeholder="50000"
-                  min="1"
+                <IndianRupee size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <input id="reg-budget" name="monthlyBudget" type="number"
+                  value={form.monthlyBudget} onChange={handleChange}
+                  placeholder="50000" min="1"
                   className={`input-field pl-10 font-numeric ${errors.monthlyBudget ? 'border-rose-400 focus:ring-rose-400' : ''}`}
-                  aria-invalid={!!errors.monthlyBudget}
-                />
+                  aria-invalid={!!errors.monthlyBudget} />
               </div>
               <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                Used for the monthly budget progress bar. You can change this later.
+                Drives the budget progress bar on your dashboard. Change anytime in Settings.
               </p>
               <FieldError message={errors.monthlyBudget} />
             </div>
 
-            {/* Submit */}
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="btn-primary w-full py-3 text-base mt-1"
-            >
-              {isSubmitting ? (
-                <><Loader2 size={17} className="animate-spin" />Creating account…</>
-              ) : (
-                <>Create account<ArrowRight size={17} /></>
-              )}
+            <button type="submit" disabled={isSubmitting}
+              className="btn-primary w-full py-3 text-base mt-1">
+              {isSubmitting
+                ? <><Loader2 size={17} className="animate-spin" />Creating account…</>
+                : <>Create account<ArrowRight size={17} /></>}
             </button>
           </form>
 
@@ -408,7 +418,7 @@ const RegisterPage = () => {
             </ul>
           </div>
 
-          {/* Divider + login link */}
+          {/* Login link */}
           <div className="relative my-5">
             <div className="absolute inset-0 flex items-center" aria-hidden="true">
               <div className="w-full border-t border-slate-100 dark:border-slate-700" />
@@ -419,7 +429,6 @@ const RegisterPage = () => {
               </span>
             </div>
           </div>
-
           <Link to="/login" className="btn-secondary w-full py-2.5 justify-center">
             Sign in instead
           </Link>
