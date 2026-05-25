@@ -1,55 +1,36 @@
 /**
- * utils/sendEmail.js
+ * utils/sendEmail.js  (Production Fix — Resend API)
  *
- * Nodemailer utility — sends a single email via SMTP.
- *
- * Expects in .env:
- * SMTP_HOST     — e.g. smtp.gmail.com
- * SMTP_PORT     — e.g. 587
- * SMTP_EMAIL    — your sending address
- * SMTP_PASSWORD — app password (NOT your account password for Gmail)
- * FROM_NAME     — display name, e.g. "TrackWise"
- *
- * Usage:
- * await sendEmail({
- * email:   'user@example.com',
- * subject: 'Verify your email',
- * message: '<p>Click <a href="...">here</a></p>',
- * });
+ * Replaces Nodemailer + Gmail SMTP entirely.
  */
 
-const nodemailer = require("nodemailer");
+const { Resend } = require("resend");
+
+// Initialise once — the client is stateless and safe to reuse
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const sendEmail = async (options) => {
-  // Create a transporter — reused per call (not a persistent connection)
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT, 10) || 587,
-    secure: parseInt(process.env.SMTP_PORT, 10) === 465,
-    auth: {
-      user: process.env.SMTP_EMAIL,
-      pass: process.env.SMTP_PASSWORD,
-    },
-    // The Ultimate IPv4 Overrides:
-    family: 4,
-    localAddress: "0.0.0.0",
+  const from = `${process.env.FROM_NAME || "TrackWise"} <${process.env.FROM_EMAIL || "onboarding@resend.dev"}>`;
+
+  const { data, error } = await resend.emails.send({
+    from,
+    to: [options.email], // Resend expects an array for 'to'
+    subject: options.subject,
+    html: wrapInTemplate(options.subject, options.message),
+    text: options.message.replace(/<[^>]+>/g, ""), // plain-text fallback
   });
 
-  const mailOptions = {
-    from: `"${process.env.FROM_NAME || "TrackWise"}" <${process.env.SMTP_EMAIL}>`,
-    to: options.email,
-    subject: options.subject,
-    // Plain-text fallback for mail clients that block HTML
-    text: options.message.replace(/<[^>]+>/g, ""),
-    // Rich HTML body
-    html: wrapInTemplate(options.subject, options.message),
-  };
+  // Resend returns an error object instead of throwing — normalise to a throw
+  // so authController's try/catch blocks work identically to before
+  if (error) {
+    console.error("Resend error:", error);
+    throw new Error(error.message || "Failed to send email via Resend.");
+  }
 
-  await transporter.sendMail(mailOptions);
+  return data;
 };
 
-// ── Minimal branded HTML wrapper ─────────────────────────────────────────────
-// Keeps emails readable and on-brand without an external template engine.
+// ── Branded HTML email wrapper ─────────────────────────────────────────────────
 const wrapInTemplate = (subject, body) => `
 <!DOCTYPE html>
 <html lang="en">
@@ -64,7 +45,8 @@ const wrapInTemplate = (subject, body) => `
     <tr><td align="center">
       <table width="560" cellpadding="0" cellspacing="0"
              style="background:#ffffff;border-radius:12px;
-                    box-shadow:0 2px 8px rgba(0,0,0,.08);overflow:hidden;">
+                    box-shadow:0 2px 8px rgba(0,0,0,.08);overflow:hidden;
+                    max-width:100%;">
         <tr>
           <td style="background:#0f172a;padding:28px 40px;text-align:center;">
             <span style="color:#10b981;font-size:22px;font-weight:800;
@@ -83,8 +65,7 @@ const wrapInTemplate = (subject, body) => `
         <tr>
           <td style="background:#f1f5f9;padding:20px 40px;
                      text-align:center;font-size:12px;color:#94a3b8;">
-            If you did not create a TrackWise account, you can safely ignore
-            this email.<br/>
+            If you did not request this, you can safely ignore this email.<br/>
             &copy; ${new Date().getFullYear()} TrackWise. All rights reserved.
           </td>
         </tr>
