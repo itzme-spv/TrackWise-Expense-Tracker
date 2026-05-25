@@ -22,11 +22,11 @@ import { Component } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
-import { ToastProvider } from './context/ToastContext';   // ✦ Phase B
+import { ToastProvider } from './context/ToastContext';
 
 // Layout
 import Navbar from './components/Navbar';
-import ToastContainer from './components/ToastContainer';  // ✦ Phase B
+import ToastContainer from './components/ToastContainer';
 
 // Pages
 import LoginPage     from './pages/LoginPage';
@@ -40,8 +40,7 @@ import SettingsPage from './pages/SettingsPage';
 import ReportsPage  from './pages/ReportsPage';
 import BudgetsPage  from './pages/BudgetsPage';
 
-// Phase 4 Auth pages
-import VerifyEmailPage    from './pages/VerifyEmailPage';
+// Phase 4 Auth pages (Email Verification removed for Portfolio Bypass)
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage  from './pages/ResetPasswordPage';
 
@@ -145,35 +144,27 @@ const AppInner = () => {
 
   return (
     <>
-      {/* ✦ Phase B — Toast stack always visible, above all routes */}
       <ToastContainer />
 
       <Routes>
-        {/* Root redirect */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
-        {/* Public routes */}
         <Route element={<PublicRoute />}>
           <Route path="/login"    element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           
-          {/* ✦ Phase 4 Auth Upgrade Routes */}
-          <Route path="/verify-email/:token"   element={<VerifyEmailPage />} />
           <Route path="/forgot-password"       element={<ForgotPasswordPage />} />
           <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
         </Route>
 
-        {/* Protected routes */}
         <Route element={<ProtectedRoute />}>
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/history"   element={<HistoryPage />} />
-          {/* ✦ Phase B — new page routes (fully built in Phase C) */}
           <Route path="/settings"  element={<SettingsPage />} />
           <Route path="/reports"   element={<ReportsPage />} />
           <Route path="/budgets"   element={<BudgetsPage />} />
         </Route>
 
-        {/* 404 fallback */}
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </>
@@ -186,7 +177,7 @@ const App = () => {
     <ThemeProvider>
       <BrowserRouter>
         <AuthProvider>
-          <ToastProvider>      {/* ✦ Phase B — wraps ErrorBoundary so toasts work inside error UI too */}
+          <ToastProvider>
             <ErrorBoundary>
               <AppInner />
             </ErrorBoundary>

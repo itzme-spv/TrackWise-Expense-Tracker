@@ -1,14 +1,9 @@
 /**
- * pages/RegisterPage.jsx  (Auth Upgrade — Phase 4A)
+ * pages/RegisterPage.jsx  (Auth Upgrade — Portfolio Bypass)
  *
- * Changes from previous version:
+ * Changes:
  * ✦ Google Sign-Up button at the top via <GoogleLogin />
- * ✦ "OR" divider between Google button and email/password form
- * ✦ register() no longer logs in — shows a "check your inbox" confirmation
- * screen instead of navigating to /dashboard
- * ✦ Password strength meter (unchanged from Phase C)
- * ✦ confirmPassword field (unchanged from Phase C)
- * ✦ All Tailwind styling matches LoginPage exactly for visual consistency
+ * ✦ Email verification screen removed — user is instantly routed to Dashboard
  */
 
 import { useState } from 'react';
@@ -18,7 +13,7 @@ import axios from 'axios';
 import {
   User, Mail, Lock, Eye, EyeOff, Loader2,
   Wallet, ArrowRight, AlertCircle,
-  CheckCircle2, IndianRupee, Sun, Moon, MailCheck,
+  CheckCircle2, IndianRupee, Sun, Moon,
 } from 'lucide-react';
 import { useAuth }  from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -90,68 +85,6 @@ const FeatureBullet = ({ text }) => (
   </li>
 );
 
-// ── Email sent confirmation screen ─────────────────────────────────────────────
-// Shown after successful registration instead of navigating to /dashboard.
-// The user must verify their email before they can log in.
-const EmailSentScreen = ({ email, isDark, toggleTheme }) => (
-  <main className="relative min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center px-4 py-12 transition-colors duration-300">
-    <BackgroundDecor />
-    <button onClick={toggleTheme} className="absolute top-5 right-5 btn-ghost"
-      aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}>
-      {isDark ? <Sun size={18} className="text-amber-400" /> : <Moon size={18} className="text-slate-500" />}
-    </button>
-
-    <div className="relative w-full max-w-md">
-      <article className="card text-center space-y-5 py-10">
-        {/* Icon */}
-        <div className="w-20 h-20 rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center mx-auto ring-1 ring-emerald-200 dark:ring-emerald-800">
-          <MailCheck size={36} className="text-emerald-500" aria-hidden="true" />
-        </div>
-
-        {/* Heading */}
-        <div className="space-y-2">
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
-            Check your inbox
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
-            We've sent a verification link to
-          </p>
-          <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 px-3 py-1.5 rounded-lg inline-block">
-            {email}
-          </p>
-        </div>
-
-        {/* Instructions */}
-        <div className="text-left bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 space-y-2.5">
-          {[
-            'Open the email from TrackWise',
-            'Click the "Verify My Email" button',
-            'You\'ll be logged in automatically',
-          ].map((step, i) => (
-            <div key={i} className="flex items-start gap-3">
-              <span className="w-5 h-5 rounded-full bg-emerald-500 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
-                {i + 1}
-              </span>
-              <p className="text-sm text-slate-600 dark:text-slate-400">{step}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Expiry warning */}
-        <p className="text-xs text-slate-400 dark:text-slate-500">
-          The link expires in <span className="font-semibold text-slate-600 dark:text-slate-400">24 hours</span>.
-          Check your spam folder if you don't see it.
-        </p>
-
-        {/* Back to login */}
-        <Link to="/login" className="btn-primary w-full py-2.5 justify-center">
-          Back to Sign In
-        </Link>
-      </article>
-    </div>
-  </main>
-);
-
 // ── Main RegisterPage ──────────────────────────────────────────────────────────
 const RegisterPage = () => {
   const { loginWithGoogle }       = useAuth();
@@ -168,13 +101,6 @@ const RegisterPage = () => {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword,  setShowPassword]  = useState(false);
   const [showConfirm,   setShowConfirm]   = useState(false);
-
-  // ✦ After registration, show the "check your inbox" screen instead of navigating
-  const [registeredEmail, setRegisteredEmail] = useState('');
-
-  if (registeredEmail) {
-    return <EmailSentScreen email={registeredEmail} isDark={isDark} toggleTheme={toggleTheme} />;
-  }
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -216,8 +142,10 @@ const RegisterPage = () => {
         monthlyBudget: Number(form.monthlyBudget) || 50000,
       });
       if (data.success) {
-        // ✦ Show email-sent screen — do NOT log in or navigate to dashboard
-        setRegisteredEmail(form.email.trim().toLowerCase());
+        // ✦ Instant Login Bypass: Save the JWT and force redirect to initialize the Auth Context
+        localStorage.setItem('token', data.token);
+        toast.success(`Welcome to TrackWise, ${form.name.split(' ')[0]}! 🎉`);
+        window.location.href = '/dashboard';
       }
     } catch (err) {
       setApiError(err?.response?.data?.message || 'Registration failed. Please try again.');
@@ -232,7 +160,7 @@ const RegisterPage = () => {
     setApiError('');
     try {
       const user = await loginWithGoogle(credentialResponse.credential);
-      toast.success(`Account created! Welcome, ${user.name.split(' ')[0]}! 🎉`, 'Welcome');
+      toast.success(`Account created! Welcome, ${user.name.split(' ')[0]}! 🎉`);
       navigate('/dashboard', { replace: true });
     } catch (err) {
       setApiError(err?.response?.data?.message || err?.message || 'Google sign-up failed. Please try again.');
@@ -245,8 +173,6 @@ const RegisterPage = () => {
     setApiError('Google sign-up was cancelled or failed. Please try again.');
   };
 
-  // ── Password field helper (prevents focus-loss bug — defined outside render) ──
-  // (Already defined outside via PwInput below — see note in SettingsPage)
   const passwordsMatch = form.confirmPassword && form.password === form.confirmPassword;
 
   return (
@@ -263,7 +189,7 @@ const RegisterPage = () => {
         {/* Brand header */}
         <div className="text-center mb-7">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-slate-900 dark:bg-slate-700 shadow-lg mb-4 relative">
-            <Wallet size={24} className="text-emerald-400" />
+            <Wallet size={24} className="textemerald-400" />
             <div className="absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/10" />
           </div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
@@ -284,7 +210,6 @@ const RegisterPage = () => {
                 Continuing with Google…
               </div>
             ) : (
-              /* Hardcoded width attribute removed here as well. */
               <div className="flex justify-center">
                 <GoogleLogin
                   onSuccess={handleGoogleSuccess}

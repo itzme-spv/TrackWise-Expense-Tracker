@@ -1,22 +1,5 @@
 /**
- * routes/auth.js  (Auth Upgrade — Phase 2)
- *
- * All /api/auth/* endpoints.
- *
- * Public routes:
- * POST   /register              — email/password sign-up (sends verification email)
- * POST   /login                 — email/password login (rejects if !isVerified)
- * GET    /verifyemail/:token    — activates account via link from email
- * POST   /forgotpassword        — sends password-reset email
- * PUT    /resetpassword/:token  — sets new password from reset link
- * POST   /google-login          — Google ID token verification → JWT
- *
- * Protected routes (require Bearer JWT via protect middleware):
- * GET    /me                    — current user profile
- * PUT    /budget                — update monthlyBudget
- * PUT    /profile               — update name, email, avatarColor
- * PUT    /password              — change password
- * DELETE /account               — cascade-delete all user data
+ * routes/auth.js  (Portfolio Bypass — Auto-Verified)
  */
 
 const express = require("express");
@@ -26,7 +9,6 @@ const router = express.Router();
 const {
   register,
   login,
-  verifyEmail,
   forgotPassword,
   resetPassword,
   googleLogin,
@@ -81,21 +63,10 @@ const loginValidation = [
 ];
 
 // ── Public routes ──────────────────────────────────────────────────────────
-
-// Standard email / password
 router.post("/register", registerValidation, register);
 router.post("/login", loginValidation, login);
-
-// Email verification — token comes from the link in the verification email
-// Using GET so the browser can hit it directly when the user clicks the link
-router.get("/verifyemail/:token", verifyEmail);
-
-// Password reset flow
 router.post("/forgotpassword", forgotPassword);
 router.put("/resetpassword/:token", resetPassword);
-
-// Google OAuth (Token Verification approach)
-// Frontend sends: { token: '<Google ID token from @react-oauth/google>' }
 router.post("/google-login", googleLogin);
 
 // ── Protected routes ───────────────────────────────────────────────────────
